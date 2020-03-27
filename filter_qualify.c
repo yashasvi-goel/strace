@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2020 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -12,15 +12,22 @@
 #include "filter.h"
 #include "delay.h"
 #include "retval.h"
+#include "static_assert.h"
 
 struct number_set *read_set;
 struct number_set *write_set;
 struct number_set *signal_set;
+struct number_set *status_set;
+struct number_set *quiet_set;
+struct number_set *decode_fd_set;
+struct number_set *trace_set;
+
+bool quiet_set_updated = false;
+bool decode_fd_set_updated = false;
 
 static struct number_set *abbrev_set;
 static struct number_set *inject_set;
 static struct number_set *raw_set;
-static struct number_set *trace_set;
 static struct number_set *verbose_set;
 
 /* Only syscall numbers are personality-specific so far.  */
@@ -58,6 +65,48 @@ sigstr_to_uint(const char *s)
 }
 
 static int
+statusstr_to_uint(const char *str)
+{
+	static const struct xlat_data statuses[] = {
+		{ STATUS_SUCCESSFUL,  "successful" },
+		{ STATUS_FAILED,      "failed" },
+		{ STATUS_UNFINISHED,  "unfinished" },
+		{ STATUS_UNAVAILABLE, "unavailable" },
+		{ STATUS_DETACHED,    "detached" },
+	};
+
+	return (int) find_arg_val(str, statuses, -1ULL, -1ULL);
+}
+
+static int
+quietstr_to_uint(const char *str)
+{
+	static const struct xlat_data quiet_strs[] = {
+		{ QUIET_ATTACH,        "attach" },
+		{ QUIET_EXIT,          "exit" },
+		{ QUIET_EXIT,          "exits" },
+		{ QUIET_PATH_RESOLVE,  "path-resolution" },
+		{ QUIET_PERSONALITY,   "personality" },
+		{ QUIET_THREAD_EXECVE, "superseded" },
+		{ QUIET_THREAD_EXECVE, "thread-execve" },
+	};
+
+	return (int) find_arg_val(str, quiet_strs, -1ULL, -1ULL);
+}
+
+static int
+decode_fd_str_to_uint(const char *str)
+{
+	static const struct xlat_data decode_fd_strs[] = {
+		{ DECODE_FD_PATH,      "path" },
+		{ DECODE_FD_SOCKET,    "socket" },
+		{ DECODE_FD_DEV,       "dev" },
+	};
+
+	return (int) find_arg_val(str, decode_fd_strs, -1ULL, -1ULL);
+}
+
+static int
 find_errno_by_name(const char *name)
 {
 	for (unsigned int i = 1; i < nerrnos; ++i) {
@@ -75,14 +124,15 @@ parse_delay_token(const char *input, struct inject_opts *fopts, bool isenter)
 
        if (fopts->data.flags & flag) /* duplicate */
                return false;
-       long long intval = string_to_ulonglong(input);
-       if (intval < 0) /* couldn't parse */
+       struct timespec tsval;
+
+       if (parse_ts(input, &tsval) < 0) /* couldn't parse */
                return false;
 
        if (fopts->data.delay_idx == (uint16_t) -1)
                fopts->data.delay_idx = alloc_delay_data();
        /* populate .ts_enter or .ts_exit */
-       fill_delay_data(fopts->data.delay_idx, intval, isenter);
+       fill_delay_data(fopts->data.delay_idx, &tsval, isenter);
        fopts->data.flags |= flag;
 
        return true;
@@ -251,7 +301,7 @@ parse_inject_expression(char *const str,
 	return name;
 }
 
-static void
+void
 qualify_read(const char *const str)
 {
 	if (!read_set)
@@ -259,7 +309,7 @@ qualify_read(const char *const str)
 	qualify_tokens(str, read_set, string_to_uint, "descriptor");
 }
 
-static void
+void
 qualify_write(const char *const str)
 {
 	if (!write_set)
@@ -267,7 +317,7 @@ qualify_write(const char *const str)
 	qualify_tokens(str, write_set, string_to_uint, "descriptor");
 }
 
-static void
+void
 qualify_signals(const char *const str)
 {
 	if (!signal_set)
@@ -275,7 +325,36 @@ qualify_signals(const char *const str)
 	qualify_tokens(str, signal_set, sigstr_to_uint, "signal");
 }
 
-static void
+void
+qualify_status(const char *const str)
+{
+	if (!status_set)
+		status_set = alloc_number_set_array(1);
+	qualify_tokens(str, status_set, statusstr_to_uint, "status");
+}
+
+void
+qualify_quiet(const char *const str)
+{
+	if (!quiet_set)
+		quiet_set = alloc_number_set_array(1);
+	else
+		quiet_set_updated = true;
+	qualify_tokens(str, quiet_set, quietstr_to_uint, "quiet");
+}
+
+void
+qualify_decode_fd(const char *const str)
+{
+	if (!decode_fd_set)
+		decode_fd_set = alloc_number_set_array(1);
+	else
+		decode_fd_set_updated = true;
+	qualify_tokens(str, decode_fd_set, decode_fd_str_to_uint,
+		       "decode-fds");
+}
+
+void
 qualify_trace(const char *const str)
 {
 	if (!trace_set)
@@ -283,7 +362,7 @@ qualify_trace(const char *const str)
 	qualify_syscall_tokens(str, trace_set);
 }
 
-static void
+void
 qualify_abbrev(const char *const str)
 {
 	if (!abbrev_set)
@@ -291,7 +370,7 @@ qualify_abbrev(const char *const str)
 	qualify_syscall_tokens(str, abbrev_set);
 }
 
-static void
+void
 qualify_verbose(const char *const str)
 {
 	if (!verbose_set)
@@ -299,7 +378,7 @@ qualify_verbose(const char *const str)
 	qualify_syscall_tokens(str, verbose_set);
 }
 
-static void
+void
 qualify_raw(const char *const str)
 {
 	if (!raw_set)
@@ -376,19 +455,19 @@ qualify_inject_common(const char *const str,
 	free_number_set_array(tmp_set, SUPPORTED_PERSONALITIES);
 }
 
-static void
+void
 qualify_fault(const char *const str)
 {
 	qualify_inject_common(str, true, "fault argument");
 }
 
-static void
+void
 qualify_inject(const char *const str)
 {
 	qualify_inject_common(str, false, "inject argument");
 }
 
-static void
+void
 qualify_kvm(const char *const str)
 {
 	if (strcmp(str, "vcpu") == 0) {
@@ -421,7 +500,12 @@ static const struct qual_options {
 	{ "x",		qualify_raw	},
 	{ "signal",	qualify_signals	},
 	{ "signals",	qualify_signals	},
+	{ "status",	qualify_status	},
 	{ "s",		qualify_signals	},
+	{ "quiet",	qualify_quiet	},
+	{ "silent",	qualify_quiet	},
+	{ "silence",	qualify_quiet	},
+	{ "q",		qualify_quiet	},
 	{ "read",	qualify_read	},
 	{ "reads",	qualify_read	},
 	{ "r",		qualify_read	},
@@ -431,6 +515,8 @@ static const struct qual_options {
 	{ "fault",	qualify_fault	},
 	{ "inject",	qualify_inject	},
 	{ "kvm",	qualify_kvm	},
+	{ "decode-fd",	qualify_decode_fd },
+	{ "decode-fds",	qualify_decode_fd },
 };
 
 void

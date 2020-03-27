@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -752,6 +752,17 @@ btrfs_test_device_ioctls(void)
 	printf("ioctl(-1, %s, {fd=%d, name=\"%s\"}) = -1 EBADF (%m)\n",
 	       ioc(BTRFS_IOC_SCAN_DEV), (int) args.fd, args.name);
 
+# ifdef BTRFS_IOC_FORGET_DEV
+	ioctl(-1, BTRFS_IOC_FORGET_DEV, NULL);
+	printf("ioctl(-1, %s, NULL) = -1 EBADF (%m)\n",
+	       ioc(BTRFS_IOC_FORGET_DEV));
+
+	strcpy(args.name, devname);
+	ioctl(-1, BTRFS_IOC_FORGET_DEV, &args);
+	printf("ioctl(-1, %s, {fd=%d, name=\"%s\"}) = -1 EBADF (%m)\n",
+	       ioc(BTRFS_IOC_FORGET_DEV), (int) args.fd, args.name);
+# endif
+
 	ioctl(-1, BTRFS_IOC_ADD_DEV, NULL);
 	printf("ioctl(-1, %s, NULL) = -1 EBADF (%m)\n", ioc(BTRFS_IOC_ADD_DEV));
 
@@ -875,9 +886,9 @@ btrfs_test_defrag_ioctls(void)
 static const char *
 xlookup(const struct xlat *xlat, const uint64_t val)
 {
-	for (; xlat->str != NULL; xlat++)
-		if (xlat->val == val)
-			return xlat->str;
+	for (size_t i = 0; i < xlat->size; i++)
+		if (xlat->data[i].val == val)
+			return xlat->data[i].str;
 	return NULL;
 }
 
@@ -2057,7 +2068,7 @@ btrfs_test_features_ioctls(void)
 static void
 btrfs_test_read_ioctls(void)
 {
-	static const struct xlat btrfs_read_cmd[] = {
+	static const struct xlat_data btrfs_read_cmd[] = {
 		XLAT(BTRFS_IOC_BALANCE_PROGRESS),
 		XLAT(BTRFS_IOC_FS_INFO),
 		XLAT(BTRFS_IOC_GET_FEATURES),

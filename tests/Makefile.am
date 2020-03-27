@@ -1,12 +1,13 @@
 # Automake input for strace tests.
 #
 # Copyright (c) 2011-2016 Dmitry V. Levin <ldv@altlinux.org>
-# Copyright (c) 2011-2018 The strace developers.
+# Copyright (c) 2011-2020 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 OS = linux
+CC = @CC@
 ARCH = @arch@
 NATIVE_ARCH = @arch_native@
 SIZEOF_KERNEL_LONG_T = @SIZEOF_KERNEL_LONG_T@
@@ -40,15 +41,19 @@ libtests_a_SOURCES = \
 	inode_of_sockfd.c \
 	libmmsg.c \
 	libsocketcall.c \
+	lock_file.c \
 	overflowuid.c \
 	pipe_maxfd.c \
 	print_quoted_string.c \
 	print_time.c \
 	printflags.c \
-	printxval.c \
+	printxval-Xabbrev.c \
+	printxval-Xraw.c \
+	printxval-Xverbose.c \
 	signal2name.c \
 	skip_unavailable.c \
 	sprintrc.c \
+	status.c \
 	tail_alloc.c \
 	test_netlink.h \
 	test_nlattr.h \
@@ -73,21 +78,36 @@ check_PROGRAMS = $(PURE_EXECUTABLES) \
 	attach-p-cmd-cmd \
 	attach-p-cmd-p \
 	block_reset_raise_run \
+	block_reset_run \
 	bpf-obj_get_info_by_fd \
 	bpf-obj_get_info_by_fd-prog \
 	bpf-obj_get_info_by_fd-prog-v \
 	bpf-obj_get_info_by_fd-v \
 	bpf-success \
+	bpf-success-long-y \
 	bpf-success-v \
 	caps-abbrev \
 	check_sigblock \
 	check_sigign \
 	clone_parent \
+	clone_parent--quiet-exit \
+	clone_parent-q \
+	clone_parent-qq \
 	clone_ptrace \
+	clone_ptrace--quiet-attach \
+	clone_ptrace--quiet-exit \
+	clone_ptrace-q \
+	clone_ptrace-qq \
+	clone3-success \
+	clone3-success-Xabbrev \
+	clone3-success-Xraw \
+	clone3-success-Xverbose \
 	count-f \
 	delay \
 	execve-v \
 	execveat-v \
+	filter_seccomp-flag \
+	filter_seccomp-perf \
 	filter-unavailable \
 	fork-f \
 	fsync-y \
@@ -98,8 +118,13 @@ check_PROGRAMS = $(PURE_EXECUTABLES) \
 	int_0x80 \
 	ioctl_dm-v \
 	ioctl_evdev-success \
+	ioctl_evdev-success-Xabbrev \
+	ioctl_evdev-success-Xraw \
+	ioctl_evdev-success-Xverbose \
 	ioctl_evdev-success-v \
-	ioctl_evdev-v \
+	ioctl_evdev-success-v-Xabbrev \
+	ioctl_evdev-success-v-Xraw \
+	ioctl_evdev-success-v-Xverbose \
 	ioctl_loop-nv \
 	ioctl_loop-v \
 	ioctl_nsfs \
@@ -156,8 +181,17 @@ check_PROGRAMS = $(PURE_EXECUTABLES) \
 	signal_receive \
 	sleep \
 	stack-fcall \
+	stack-fcall-attach \
 	stack-fcall-mangled \
+	status-none-threads \
+	status-unfinished-threads \
+	syslog-success \
 	threads-execve \
+	threads-execve--quiet-thread-execve \
+	threads-execve-q \
+	threads-execve-qq \
+	threads-execve-qqq \
+	tracer_ppid_pgid_sid \
 	unblock_reset_raise \
 	unix-pair-send-recv \
 	unix-pair-sendto-recvfrom \
@@ -177,6 +211,8 @@ ftruncate64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 localtime_LDADD = $(clock_LIBS) $(LDADD)
 looping_threads_LDADD = -lpthread $(LDADD)
 lstat64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
+maybe_switch_current_tcp_LDADD = -lpthread $(LDADD)
+maybe_switch_current_tcp__quiet_thread_execve_LDADD = -lpthread $(LDADD)
 mmap64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 mmap64_Xabbrev_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 mmap64_Xraw_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
@@ -190,12 +226,21 @@ preadv_pwritev_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 pwritev_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 stat64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 statfs_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
+status_none_threads_LDADD = -lpthread $(LDADD)
+status_unfinished_threads_LDADD = -lpthread $(LDADD)
 threads_execve_LDADD = -lpthread $(clock_LIBS) $(LDADD)
+threads_execve__quiet_thread_execve_LDADD = -lpthread $(clock_LIBS) $(LDADD)
+threads_execve_q_LDADD = -lpthread $(clock_LIBS) $(LDADD)
+threads_execve_qq_LDADD = -lpthread $(clock_LIBS) $(LDADD)
+threads_execve_qqq_LDADD = -lpthread $(clock_LIBS) $(LDADD)
 times_LDADD = $(clock_LIBS) $(LDADD)
 truncate64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 uio_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 
 stack_fcall_SOURCES = stack-fcall.c \
+	stack-fcall-0.c stack-fcall-1.c stack-fcall-2.c stack-fcall-3.c
+
+stack_fcall_attach_SOURCES = stack-fcall-attach.c \
 	stack-fcall-0.c stack-fcall-1.c stack-fcall-2.c stack-fcall-3.c
 
 stack_fcall_mangled_SOURCES = stack-fcall-mangled.c \
@@ -205,7 +250,7 @@ stack_fcall_mangled_SOURCES = stack-fcall-mangled.c \
 include gen_tests.am
 
 if ENABLE_STACKTRACE
-STACKTRACE_TESTS = strace-k.test
+STACKTRACE_TESTS = strace-k.test strace-k-p.test
 if USE_DEMANGLE
 STACKTRACE_TESTS += strace-k-demangle.test
 endif
@@ -214,6 +259,7 @@ STACKTRACE_TESTS =
 endif
 
 DECODER_TESTS = \
+	bpf-success-long-y.test \
 	bpf-success-v.test \
 	bpf-success.test \
 	brk.test \
@@ -226,6 +272,8 @@ DECODER_TESTS = \
 	btrfs-wX.test \
 	caps-abbrev.test \
 	caps.test \
+	clone-flags.test \
+	clone3-success.test \
 	eventfd.test \
 	execve-v.test \
 	execve.test \
@@ -233,8 +281,8 @@ DECODER_TESTS = \
 	futex.test \
 	getuid.test \
 	int_0x80.test \
+	inotify_init-y.test \
 	ioctl.test \
-	ioctl_evdev-success-v.test \
 	ioctl_evdev-success.test \
 	ioctl_perf-success.test \
 	ipc_msgbuf.test \
@@ -278,6 +326,7 @@ DECODER_TESTS = \
 	seccomp-strict.test \
 	sigaltstack.test \
 	sun_path.test \
+	syslog-success.test \
 	uio.test \
 	umount.test \
 	umount2.test \
@@ -293,7 +342,6 @@ MISC_TESTS = \
 	attach-f-p.test \
 	attach-p-cmd.test \
 	bexecve.test \
-	clone_parent.test \
 	clone_ptrace.test \
 	count-f.test \
 	count.test \
@@ -302,6 +350,7 @@ MISC_TESTS = \
 	detach-sleeping.test \
 	detach-stopped.test \
 	fflush.test \
+	filter_seccomp-perf.test \
 	filter-unavailable.test \
 	filtering_fd-syntax.test \
 	filtering_syscall-syntax.test \
@@ -310,7 +359,6 @@ MISC_TESTS = \
 	inject-nf.test \
 	interactive_block.test \
 	kill_child.test \
-	ksysent.test \
 	localtime.test \
 	looping_threads.test \
 	opipe.test \
@@ -335,18 +383,27 @@ MISC_TESTS = \
 	restart_syscall.test \
 	sigblock.test \
 	sigign.test \
+	status-detached.test \
+	status-none-threads.test \
+	status-unfinished-threads.test \
 	strace-C.test \
+	strace-D.test \
+	strace-DD.test \
+	strace-DDD.test \
 	strace-E.test \
 	strace-S.test \
 	strace-T.test \
 	strace-V.test \
 	strace-ff.test \
+	strace-log-merge-error.test \
+	strace-log-merge-suffix.test \
 	strace-r.test \
 	strace-t.test \
 	strace-tt.test \
 	strace-ttt.test \
 	termsig.test \
 	threads-execve.test \
+	umovestr_cached.test \
 	# end of MISC_TESTS
 
 TESTS = $(GEN_TESTS) $(DECODER_TESTS) $(MISC_TESTS) $(STACKTRACE_TESTS)
@@ -379,6 +436,8 @@ EXTRA_DIST = \
 	eventfd.expected \
 	fadvise.h \
 	fcntl-common.c \
+	filter_seccomp.in \
+	filter_seccomp.sh \
 	filter-unavailable.expected \
 	fstatat.c \
 	fstatx.c \
@@ -390,6 +449,8 @@ EXTRA_DIST = \
 	init_delete_module.h \
 	ioctl_kvm_run_common.c \
 	ipc.sh \
+	kernel_old_timespec.h \
+	kernel_old_timex.h \
 	ksysent.sed \
 	lstatx.c \
 	match.awk \
@@ -399,6 +460,7 @@ EXTRA_DIST = \
 	pipe.expected \
 	print_user_desc.c \
 	printsignal.c \
+	printxval.c \
 	process_vm_readv_writev.c \
 	pure_executables.list \
 	qual_fault-exit_group.expected \
@@ -412,6 +474,7 @@ EXTRA_DIST = \
 	run.sh \
 	sched.in \
 	scno_tampering.sh \
+	semop-common.c \
 	setfsugid.c \
 	setresugid.c \
 	setreugid.c \
@@ -420,18 +483,36 @@ EXTRA_DIST = \
 	sockaddr_xlat.c \
 	sockname.c \
 	stack-fcall.h \
+	status-detached.expected \
+	strace--follow-forks-output-separately.expected \
+	strace--relative-timestamps.expected \
+	strace--relative-timestamps-s.expected \
+	strace--relative-timestamps-ms.expected \
+	strace--relative-timestamps-us.expected \
+	strace--relative-timestamps-ns.expected \
+	strace--syscall-times.expected \
+	strace--syscall-times-s.expected \
+	strace--syscall-times-ms.expected \
+	strace--syscall-times-us.expected \
+	strace--syscall-times-ns.expected \
 	strace-C.expected \
+	strace-D.expected \
+	strace-DD.expected \
+	strace-DDD.expected \
 	strace-E.expected \
 	strace-T.expected \
 	strace-ff.expected \
 	strace-k-demangle.expected \
 	strace-k-demangle.test \
+	strace-k-p.expected \
+	strace-k-p.test \
 	strace-k.expected \
 	strace-k.test \
 	strace-r.expected \
 	strace.supp \
 	sun_path.expected \
 	syntax.sh \
+	trace_creds.in \
 	trace_fstat.in \
 	trace_fstatfs.in \
 	trace_lstat.in \

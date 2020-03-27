@@ -2,7 +2,7 @@
  * Check decoding of seccomp SECCOMP_SET_MODE_FILTER.
  *
  * Copyright (c) 2016 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -11,7 +11,7 @@
 #include "tests.h"
 
 #include <stdio.h>
-#include <asm/unistd.h>
+#include "scno.h"
 #include <unistd.h>
 
 #ifdef HAVE_LINUX_SECCOMP_H

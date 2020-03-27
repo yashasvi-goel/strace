@@ -1,17 +1,16 @@
 /*
  * Copyright (c) 2016-2018 Dmitry V. Levin <ldv@altlinux.org>
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "tests.h"
-#include <asm/unistd.h>
-#ifdef HAVE_PRCTL
-# include <sys/prctl.h>
-#endif
+#include <sys/prctl.h>
+#include "scno.h"
 
-#if defined HAVE_PRCTL && defined PR_SET_SECCOMP && defined __NR_exit
+#if defined PR_SET_SECCOMP && defined __NR_exit
 
 # include <stdio.h>
 # include <unistd.h>
@@ -36,7 +35,7 @@ main(void)
 		rc = 0;
 	} else {
 		/*
-		 * If kernel implementaton of SECCOMP_MODE_STRICT is buggy,
+		 * If kernel implementation of SECCOMP_MODE_STRICT is buggy,
 		 * the following syscall will result to SIGKILL.
 		 */
 		rc = write(1, text1, LENGTH_OF(text1)) != LENGTH_OF(text1);
@@ -48,6 +47,6 @@ main(void)
 
 #else
 
-SKIP_MAIN_UNDEFINED("HAVE_PRCTL && PR_SET_SECCOMP && __NR_exit")
+SKIP_MAIN_UNDEFINED("PR_SET_SECCOMP && __NR_exit")
 
 #endif

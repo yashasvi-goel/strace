@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 Jeff Mahoney <jeffm@suse.com>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -1161,6 +1161,9 @@ MPERS_PRINTER_DECL(int, btrfs_ioctl,
 	case BTRFS_IOC_SNAP_CREATE:
 	case BTRFS_IOC_RESIZE:
 	case BTRFS_IOC_SCAN_DEV:
+# ifdef BTRFS_IOC_FORGET_DEV
+	case BTRFS_IOC_FORGET_DEV:
+# endif
 	case BTRFS_IOC_ADD_DEV:
 	case BTRFS_IOC_RM_DEV:
 	case BTRFS_IOC_SUBVOL_CREATE:

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright (c) 2015 Dmitry V. Levin <ldv@altlinux.org>
-# Copyright (c) 2015-2018 The strace developers.
+# Copyright (c) 2015-2020 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
@@ -143,6 +143,14 @@ typedef unsigned long long u64;
 
 #include "fixes.h"
 
+#ifndef UL
+# define UL(x) (_UL(x))
+#endif
+
+#ifndef ULL
+# define ULL(x) (_ULL(x))
+#endif
+
 #include <asm/bitsperlong.h>
 #ifndef BITS_PER_LONG
 # define BITS_PER_LONG __BITS_PER_LONG
@@ -243,6 +251,9 @@ __EOF__
 			;;
 		*linux/omap3isp.h)
 			echo 'struct omap3isp_stat_data_time32 {uint32_t dummy32[4]; uint16_t dummy16[3]; };'
+			;;
+		*linux/platform_data/cros_ec_chardev.h)
+			echo 'struct cros_ec_command {uint32_t dummy32[5]; uint8_t dummy8[0]; };'
 			;;
 		*linux/sonet.h)
 			echo '#include <linux/atmioc.h>'
@@ -385,7 +396,7 @@ s/^\([[:space:]]\+[^),]\+)\),$/\1/' >> "$tmpdir/$f"
 			arm_list='KVM_ARM_[A-Z_]+'
 			ppc_list='KVM_ALLOCATE_RMA|KVM_CREATE_SPAPR_TCE|KVM_CREATE_SPAPR_TCE_64|KVM_PPC_[A-Z1-9_]+'
 			s390_list='KVM_S390_[A-Z_]+'
-			x86_list='KVM_GET_CPUID2|KVM_GET_DEBUGREGS|KVM_GET_EMULATED_CPUID|KVM_GET_LAPIC|KVM_GET_MSRS|KVM_GET_MSR_FEATURE_INDEX_LIST|KVM_GET_MSR_INDEX_LIST|KVM_GET_NESTED_STATE|KVM_GET_PIT|KVM_GET_PIT2|KVM_GET_SUPPORTED_CPUID|KVM_GET_SUPPORTED_HV_CPUID|KVM_GET_VCPU_EVENTS|KVM_GET_XCRS|KVM_GET_XSAVE|KVM_HYPERV_EVENTFD|KVM_SET_CPUID|KVM_SET_CPUID2|KVM_SET_DEBUGREGS|KVM_SET_LAPIC|KVM_SET_MEMORY_ALIAS|KVM_SET_MSRS|KVM_SET_NESTED_STATE|KVM_SET_PIT|KVM_SET_PIT2|KVM_SET_VCPU_EVENTS|KVM_SET_XCRS|KVM_SET_XSAVE|KVM_XEN_HVM_CONFIG|KVM_X86_[A-Z_]+'
+			x86_list='KVM_GET_CPUID2|KVM_GET_DEBUGREGS|KVM_GET_EMULATED_CPUID|KVM_GET_LAPIC|KVM_GET_MSRS|KVM_GET_MSR_FEATURE_INDEX_LIST|KVM_GET_MSR_INDEX_LIST|KVM_GET_NESTED_STATE|KVM_GET_PIT|KVM_GET_PIT2|KVM_GET_SUPPORTED_CPUID|KVM_GET_SUPPORTED_HV_CPUID|KVM_GET_VCPU_EVENTS|KVM_GET_XCRS|KVM_GET_XSAVE|KVM_HYPERV_EVENTFD|KVM_SET_CPUID|KVM_SET_CPUID2|KVM_SET_DEBUGREGS|KVM_SET_LAPIC|KVM_SET_MEMORY_ALIAS|KVM_SET_MSRS|KVM_SET_NESTED_STATE|KVM_SET_PIT|KVM_SET_PIT2|KVM_SET_PMU_EVENT_FILTER|KVM_SET_VCPU_EVENTS|KVM_SET_XCRS|KVM_SET_XSAVE|KVM_XEN_HVM_CONFIG|KVM_X86_[A-Z_]+'
 			case "$uname_m" in
 				aarch64|arm*) list="$ppc_list|$s390_list|$x86_list" ;;
 				ppc*) list="$arm_list|$s390_list|$x86_list" ;;

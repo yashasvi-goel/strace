@@ -2,7 +2,7 @@
 #
 # Update copyright notices for source files.
 #
-# Copyright (c) 2017-2018 The strace developers.
+# Copyright (c) 2017-2020 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
@@ -99,13 +99,13 @@ process_file()
 
 	if [ -z "$copyright_year_raw" ]; then
 		debug "Copyright notices haven't been found, skipping: $f"
-		continue
+		return
 	fi
 
-	last_commit_year=$(date -u +%Y -d "$(git log -n1 --format=format:%aD \
-		-- "$f")")
-	first_commit_year=$(date -u +%Y -d "$(git log --reverse --format=format:%aD \
-		-- "$f" | head -n 1)")
+	last_commit_year=$(date -u +%Y -d "@$(git log --format=format:%at -- "$f" |
+						sort -rn |head -n1)")
+	first_commit_year=$(date -u +%Y -d "@$(git log --format=format:%at -- "$f" |
+						sort -n |head -n1)")
 	copyright_year=$(printf '%s' "$copyright_year_raw" |
 		sort -r -n | head -n 1)
 	start_note='from git log'
@@ -116,19 +116,22 @@ process_file()
 	# assume copyright notice is still relevant
 	if [ "$last_commit_year" = "$copyright_year" ]; then
 		debug "Does not need update, skipping: $f"
-		continue
+		return
 	else
 		debug "Needs update ('$copyright_year' != '$last_commit_year'): $f"
 	fi
 
 	# avoid gaps not covered by copyright
+	[ -n "$copyright_year" ] &&
 	[ "$first_commit_year" -lt "$copyright_year" ] || {
 		start_note='from last copyright year'
 		first_commit_year="$copyright_year"
 	}
 
-	# if there is existing notice, its starting year takes precedence
-	if [ -n "$existing_notice_year" ]; then
+	# if there is existing notice and its starting year is earlier
+	# than the year of the first commit, the former takes precedence
+	if [ -n "$existing_notice_year" ] &&
+	   [ "$existing_notice_year" -le "$first_commit_year" ]; then
 		start_note='from existing copyright notice'
 		first_commit_year="$existing_notice_year"
 	fi

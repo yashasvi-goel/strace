@@ -1,6 +1,6 @@
 # Executables without side effects.
 #
-# Copyright (c) 2017-2018 The strace developers.
+# Copyright (c) 2017-2019 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -16,10 +16,6 @@ aio
 aio_pgetevents
 alarm
 bpf
-bpf-obj_get_info_by_fd
-bpf-obj_get_info_by_fd-prog
-bpf-obj_get_info_by_fd-prog-v
-bpf-obj_get_info_by_fd-v
 bpf-v
 brk
 btrfs
@@ -31,9 +27,17 @@ chroot
 clock_adjtime
 clock_nanosleep
 clock_xettime
+clone-flags
+clone3
+clone3-Xabbrev
+clone3-Xraw
+clone3-Xverbose
 copy_file_range
 creat
 delete_module
+dev--decode-fds-dev
+dev--decode-fds-path
+dev--decode-fds-socket
 dev-yy
 dup
 dup2
@@ -70,6 +74,12 @@ file_handle
 file_ioctl
 finit_module
 flock
+fsconfig
+fsconfig-P
+fsmount
+fsopen
+fspick
+fspick-P
 fstat
 fstat-Xabbrev
 fstat-Xraw
@@ -119,11 +129,24 @@ group_req
 inet-cmsg
 init_module
 inotify
+inotify_init
+inotify_init-y
 inotify_init1
+inotify_init1-y
+io_uring_enter
+io_uring_register
+io_uring_setup
 ioctl
 ioctl_block
 ioctl_dm
 ioctl_evdev
+ioctl_evdev-Xabbrev
+ioctl_evdev-Xraw
+ioctl_evdev-Xverbose
+ioctl_evdev-v
+ioctl_evdev-v-Xabbrev
+ioctl_evdev-v-Xraw
+ioctl_evdev-v-Xverbose
 ioctl_inotify
 ioctl_kvm_run
 ioctl_kvm_run-v
@@ -141,6 +164,7 @@ ioctl_sg_io_v4
 ioctl_sock_gifconf
 ioctl_uffdio
 ioctl_v4l2
+ioctl_watchdog
 ioperm
 iopl
 ioprio
@@ -189,7 +213,12 @@ lseek
 lstat
 lstat64
 madvise
+maybe_switch_current_tcp
+maybe_switch_current_tcp--quiet-thread-execve
 mbind
+mbind-Xabbrev
+mbind-Xraw
+mbind-Xverbose
 membarrier
 memfd_create
 memfd_create-Xabbrev
@@ -219,6 +248,8 @@ mount
 mount-Xabbrev
 mount-Xraw
 mount-Xverbose
+move_mount
+move_mount-P
 move_pages
 move_pages-Xabbrev
 move_pages-Xraw
@@ -231,8 +262,15 @@ msg_control
 msg_name
 munlockall
 nanosleep
+net--decode-fds-dev-netlink
+net--decode-fds-none-netlink
+net--decode-fds-path-netlink
+net--decode-fds-socket-netlink
 net-icmp_filter
 net-packet_mreq
+net-packet_mreq-Xabbrev
+net-packet_mreq-Xraw
+net-packet_mreq-Xverbose
 net-sockaddr
 net-tpacket_req
 net-tpacket_stats
@@ -307,6 +345,8 @@ oldselect
 oldselect-efault
 oldstat
 open
+open_tree
+open_tree-P
 openat
 osf_utimes
 pause
@@ -315,6 +355,11 @@ personality
 personality-Xabbrev
 personality-Xraw
 personality-Xverbose
+pidfd_open
+pidfd_open--decode-fd-path
+pidfd_open-P
+pidfd_open-y
+pidfd_send_signal
 pipe
 pipe2
 pkey_alloc
@@ -365,7 +410,9 @@ readlink
 readlinkat
 readv
 reboot
+recv-MSG_TRUNC
 recvfrom
+recvfrom-MSG_TRUNC
 recvmmsg-timeout
 recvmsg
 remap_file_pages
@@ -403,9 +450,14 @@ seccomp-filter
 seccomp_get_action_avail
 select
 semop
+semop-indirect
+semtimedop
 sendfile
 sendfile64
 set_mempolicy
+set_mempolicy-Xabbrev
+set_mempolicy-Xraw
+set_mempolicy-Xverbose
 setdomainname
 setfsgid
 setfsgid32
@@ -457,12 +509,28 @@ sockaddr_xlat-Xraw
 sockaddr_xlat-Xverbose
 socketcall
 sockopt-sol_netlink
+sockopt-timestamp
 splice
 stat
 stat64
 statfs
 statfs64
+status-all
+status-failed
+status-failed-long
+status-failed-status
+status-none
+status-none-f
+status-successful
+status-successful-long
+status-successful-status
+status-unfinished
 statx
+strace--strings-in-hex
+strace--strings-in-hex-all
+strace--strings-in-hex-non-ascii
+strace-x
+strace-xx
 swap
 sxetmask
 symlink
@@ -491,6 +559,7 @@ umovestr
 umovestr-illptr
 umovestr2
 umovestr3
+umovestr_cached
 uname
 unlink
 unlinkat

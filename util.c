@@ -6,7 +6,7 @@
  * Copyright (c) 1999 IBM Deutschland Entwicklung GmbH, IBM Corporation
  *                     Linux for s390 port by D.J. Barrow
  *                    <barrow_dj@mail.yahoo.com,djbarrow@de.ibm.com>
- * Copyright (c) 1999-2018 The strace developers.
+ * Copyright (c) 1999-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -24,10 +24,61 @@
 #include <sys/uio.h>
 
 #include "largefile_wrappers.h"
+#include "number_set.h"
 #include "print_utils.h"
 #include "static_assert.h"
+#include "string_to_uint.h"
 #include "xlat.h"
 #include "xstring.h"
+
+const struct xlat_data *
+find_xlat_val_ex(const struct xlat_data *items, const char *s, size_t num_items,
+		 unsigned int flags)
+{
+	for (size_t i = 0; i < num_items; i++) {
+		if (!(flags & FXL_CASE_SENSITIVE ? strcmp
+						 : strcasecmp)(items[i].str, s))
+			return items + i;
+	}
+
+	return NULL;
+}
+
+uint64_t
+find_arg_val_(const char *arg, const struct xlat_data *strs, size_t strs_size,
+	       uint64_t default_val, uint64_t not_found)
+{
+	if (!arg)
+		return default_val;
+
+	const struct xlat_data *res = find_xlat_val_ex(strs, arg, strs_size, 0);
+
+	return  res ? res->val : not_found;
+}
+
+int
+str2timescale_ex(const char *arg, int empty_dflt, int null_dflt,
+		 int *width)
+{
+	static const struct xlat_data units[] = {
+		{ 1000000000U | (0ULL << 32), "s" },
+		{ 1000000U    | (3ULL << 32), "ms" },
+		{ 1000U       | (6ULL << 32), "us" },
+		{ 1U          | (9ULL << 32), "ns" },
+	};
+
+	if (!arg)
+		return null_dflt;
+	if (!arg[0])
+		return empty_dflt;
+
+	uint64_t res = find_arg_val(arg, units, null_dflt, -1ULL);
+
+	if (width && res != -1ULL)
+		*width = res >> 32;
+
+	return res & 0xffffffff;
+}
 
 int
 ts_nz(const struct timespec *a)
@@ -89,6 +140,65 @@ ts_mul(struct timespec *tv, const struct timespec *a, int n)
 	long long nsec = a->tv_nsec * n;
 	tv->tv_sec = a->tv_sec * n + nsec / 1000000000;
 	tv->tv_nsec = nsec % 1000000000;
+}
+
+const struct timespec *
+ts_min(const struct timespec *a, const struct timespec *b)
+{
+	return ts_cmp(a, b) < 0 ? a : b;
+}
+
+const struct timespec *
+ts_max(const struct timespec *a, const struct timespec *b)
+{
+	return ts_cmp(a, b) > 0 ? a : b;
+}
+
+int
+parse_ts(const char *s, struct timespec *t)
+{
+	enum { NS_IN_S = 1000000000 };
+
+	static const char float_accept[] =  "eE.-+0123456789";
+	static const char int_accept[] = "+0123456789";
+
+	size_t float_len = strspn(s, float_accept);
+	size_t int_len = strspn(s, int_accept);
+	char *endptr = NULL;
+	double float_val = -1;
+	long long int_val = -1;
+
+	if (float_len > int_len) {
+		errno = 0;
+
+		float_val = strtod(s, &endptr);
+
+		if (endptr == s || errno)
+			return -1;
+		if (float_val < 0)
+			return -1;
+	} else {
+		int_val = string_to_uint_ex(s, &endptr, LLONG_MAX, "smun");
+
+		if (int_val < 0)
+			return -1;
+	}
+
+	int scale = str2timescale_sfx(endptr, NULL);
+	if (scale <= 0)
+		return -1;
+
+	if (float_len > int_len) {
+		t->tv_sec = float_val / (NS_IN_S / scale);
+		t->tv_nsec = ((uint64_t) ((float_val -
+					   (t->tv_sec * (NS_IN_S / scale)))
+					  * scale)) % NS_IN_S;
+	} else {
+		t->tv_sec = int_val / (NS_IN_S / scale);
+		t->tv_nsec = (int_val % (NS_IN_S / scale)) * scale;
+	}
+
+	return 0;
 }
 
 #if !defined HAVE_STPCPY
@@ -159,10 +269,10 @@ getllval(struct tcb *tcp, unsigned long long *val, int arg_no)
 #if SIZEOF_KERNEL_LONG_T > 4
 # ifndef current_klongsize
 	if (current_klongsize < SIZEOF_KERNEL_LONG_T) {
-#  if defined(AARCH64) || defined(POWERPC64)
+#  if defined(AARCH64) || defined(POWERPC64) || defined(POWERPC64LE)
 		/* Align arg_no to the next even number. */
 		arg_no = (arg_no + 1) & 0xe;
-#  endif /* AARCH64 || POWERPC64 */
+#  endif /* AARCH64 || POWERPC64 || POWERPC64LE */
 		*val = ULONG_LONG(tcp->u_arg[arg_no], tcp->u_arg[arg_no + 1]);
 		arg_no += 2;
 	} else
@@ -270,40 +380,17 @@ DEF_PRINTNUM(int64, uint64_t)
 DEF_PRINTNUM_ADDR(int64, uint64_t)
 DEF_PRINTPAIR(int64, uint64_t)
 
-#ifndef current_wordsize
 bool
-printnum_long_int(struct tcb *const tcp, const kernel_ulong_t addr,
-		  const char *const fmt_long, const char *const fmt_int)
+printnum_fd(struct tcb *const tcp, const kernel_ulong_t addr)
 {
-	if (current_wordsize > sizeof(int)) {
-		return printnum_int64(tcp, addr, fmt_long);
-	} else {
-		return printnum_int(tcp, addr, fmt_int);
-	}
+	int fd;
+	if (umove_or_printaddr(tcp, addr, &fd))
+		return false;
+	tprints("[");
+	printfd(tcp, fd);
+	tprints("]");
+	return true;
 }
-
-bool
-printnum_addr_long_int(struct tcb *tcp, const kernel_ulong_t addr)
-{
-	if (current_wordsize > sizeof(int)) {
-		return printnum_addr_int64(tcp, addr);
-	} else {
-		return printnum_addr_int(tcp, addr);
-	}
-}
-#endif /* !current_wordsize */
-
-#ifndef current_klongsize
-bool
-printnum_addr_klong_int(struct tcb *tcp, const kernel_ulong_t addr)
-{
-	if (current_klongsize > sizeof(int)) {
-		return printnum_addr_int64(tcp, addr);
-	} else {
-		return printnum_addr_int(tcp, addr);
-	}
-}
-#endif /* !current_klongsize */
 
 /**
  * Prints time to a (static internal) buffer and returns pointer to it.
@@ -455,7 +542,7 @@ printsocket(struct tcb *tcp, int fd, const char *path)
 static bool
 printdev(struct tcb *tcp, int fd, const char *path)
 {
-	struct_stat st;
+	strace_stat_t st;
 
 	if (path[0] != '/')
 		return false;
@@ -484,17 +571,23 @@ void
 printfd(struct tcb *tcp, int fd)
 {
 	char path[PATH_MAX + 1];
-	if (show_fd_path && getfdpath(tcp, fd, path, sizeof(path)) >= 0) {
-		tprintf("%d<", fd);
-		if (show_fd_path <= 1
-		    || (!printsocket(tcp, fd, path)
-		         && !printdev(tcp, fd, path))) {
-			print_quoted_string_ex(path, strlen(path),
-				QUOTE_OMIT_LEADING_TRAILING_QUOTES, "<>");
-		}
+	if (!number_set_array_is_empty(decode_fd_set, 0)
+	    && getfdpath(tcp, fd, path, sizeof(path)) >= 0) {
+		tprintf("%d<", (int) fd);
+		if (is_number_in_set(DECODE_FD_SOCKET, decode_fd_set) &&
+		    printsocket(tcp, fd, path))
+			goto printed;
+		if (is_number_in_set(DECODE_FD_DEV, decode_fd_set) &&
+		    printdev(tcp, fd, path))
+			goto printed;
+		print_quoted_string_ex(path, strlen(path),
+			QUOTE_OMIT_LEADING_TRAILING_QUOTES, "<>");
+
+printed:
 		tprints(">");
-	} else
+	} else {
 		tprintf("%d", fd);
+	}
 }
 
 /*
@@ -857,7 +950,7 @@ printstr_ex(struct tcb *const tcp, const kernel_ulong_t addr,
 	 */
 	ellipsis = string_quote(str, outstr, size, style, NULL)
 		   && len
-		   && ((style & QUOTE_0_TERMINATED)
+		   && ((style & (QUOTE_0_TERMINATED | QUOTE_EXPECT_TRAILING_0))
 		       || len > max_strlen);
 
 	tprints(outstr);
@@ -934,6 +1027,9 @@ dumpiov_upto(struct tcb *const tcp, const int len, const kernel_ulong_t addr,
 		(ret_) |= shift_;					\
 	} while (0)
 
+#if SIZEOF_KERNEL_LONG_T > 4
+
+# define ilog2_klong ilog2_64
 /**
  * Calculate floor(log2(val)), with the exception of val == 0, for which 0
  * is returned as well.
@@ -956,6 +1052,9 @@ ilog2_64(uint64_t val)
 	return ret;
 }
 
+#else /* SIZEOF_KERNEL_LONG_T == 4 */
+
+# define ilog2_klong ilog2_32
 /**
  * Calculate floor(log2(val)), with the exception of val == 0, for which 0
  * is returned as well.
@@ -977,13 +1076,9 @@ ilog2_32(uint32_t val)
 	return ret;
 }
 
-#undef ILOG2_ITER_
+#endif /* SIZEOF_KERNEL_LONG_T */
 
-#if SIZEOF_KERNEL_LONG_T > 4
-# define ilog2_klong ilog2_64
-#else
-# define ilog2_klong ilog2_32
-#endif
+#undef ILOG2_ITER_
 
 void
 dumpstr(struct tcb *const tcp, const kernel_ulong_t addr,
@@ -1185,6 +1280,24 @@ print_uint64_array_member(struct tcb *tcp, void *elem_buf, size_t elem_size,
 	return true;
 }
 
+bool
+print_xint32_array_member(struct tcb *tcp, void *elem_buf, size_t elem_size,
+			  void *data)
+{
+	tprintf("%#" PRIx32, *(uint32_t *) elem_buf);
+
+	return true;
+}
+
+bool
+print_xint64_array_member(struct tcb *tcp, void *elem_buf, size_t elem_size,
+			  void *data)
+{
+	tprintf("%#" PRIx64, *(uint64_t *) elem_buf);
+
+	return true;
+}
+
 /*
  * Iteratively fetch and print up to nmemb elements of elem_size size
  * from the array that starts at tracee's address start_addr.
@@ -1220,14 +1333,13 @@ bool
 print_array_ex(struct tcb *const tcp,
 	       const kernel_ulong_t start_addr,
 	       const size_t nmemb,
-	       void *const elem_buf,
+	       void *elem_buf,
 	       const size_t elem_size,
 	       tfetch_mem_fn tfetch_mem_func,
 	       print_fn print_func,
 	       void *const opaque_data,
 	       unsigned int flags,
 	       const struct xlat *index_xlat,
-	       size_t index_xlat_size,
 	       const char *index_dflt)
 {
 	if (!start_addr) {
@@ -1244,7 +1356,10 @@ print_array_ex(struct tcb *const tcp,
 	const kernel_ulong_t end_addr = start_addr + size;
 
 	if (end_addr <= start_addr || size / elem_size != nmemb) {
-		printaddr(start_addr);
+		if (tfetch_mem_func)
+			printaddr(start_addr);
+		else
+			tprints("???");
 		return false;
 	}
 
@@ -1254,19 +1369,25 @@ print_array_ex(struct tcb *const tcp,
 	kernel_ulong_t cur;
 	kernel_ulong_t idx = 0;
 	enum xlat_style xlat_style = flags & XLAT_STYLE_MASK;
+	bool truncated = false;
 
 	for (cur = start_addr; cur < end_addr; cur += elem_size, idx++) {
 		if (cur != start_addr)
 			tprints(", ");
 
-		if (!tfetch_mem_func(tcp, cur, elem_size, elem_buf)) {
-			if (cur == start_addr)
-				printaddr(cur);
-			else {
-				tprints("...");
-				printaddr_comment(cur);
+		if (tfetch_mem_func) {
+			if (!tfetch_mem_func(tcp, cur, elem_size, elem_buf)) {
+				if (cur == start_addr)
+					printaddr(cur);
+				else {
+					tprints("...");
+					printaddr_comment(cur);
+					truncated = true;
+				}
+				break;
 			}
-			break;
+		} else {
+			elem_buf = (void *) (uintptr_t) cur;
 		}
 
 		if (cur == start_addr)
@@ -1275,6 +1396,7 @@ print_array_ex(struct tcb *const tcp,
 		if (cur >= abbrev_end) {
 			tprints("...");
 			cur = end_addr;
+			truncated = true;
 			break;
 		}
 
@@ -1283,15 +1405,9 @@ print_array_ex(struct tcb *const tcp,
 
 			if (!index_xlat) {
 				print_xlat_ex(idx, NULL, xlat_style);
-			} else if (flags & PAF_INDEX_XLAT_VALUE_INDEXED) {
-				printxval_indexn_ex(index_xlat,
-						    index_xlat_size, idx,
-						    index_dflt, xlat_style);
 			} else {
-				printxvals_ex(idx, index_dflt, xlat_style,
-					      (flags & PAF_INDEX_XLAT_SORTED)
-						&& idx ? NULL : index_xlat,
-					      NULL);
+				printxval_ex(idx ? NULL : index_xlat, idx,
+					     index_dflt, xlat_style);
 			}
 
 			tprints("] = ");
@@ -1302,8 +1418,17 @@ print_array_ex(struct tcb *const tcp,
 			break;
 		}
 	}
-	if (cur != start_addr)
+
+	if ((cur != start_addr) || !tfetch_mem_func) {
+		if ((flags & PAF_ARRAY_TRUNCATED) && !truncated) {
+			if (cur != start_addr)
+				tprints(", ");
+
+			tprints("...");
+		}
+
 		tprints("]");
+	}
 
 	return cur >= end_addr;
 }
@@ -1350,12 +1475,6 @@ print_abnormal_hi(const kernel_ulong_t val)
 			tprintf("%#x<<32|", hi);
 	}
 }
-
-#if defined _LARGEFILE64_SOURCE && defined HAVE_OPEN64
-# define open_file open64
-#else
-# define open_file open
-#endif
 
 int
 read_int_from_file(struct tcb *tcp, const char *const fname, int *const pvalue)

@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2017 Masatake YAMATO <yamato@redhat.com>
  * Copyright (c) 2017 Red Hat, Inc.
- * Copyright (c) 2017-2018 The strace developers.
+ * Copyright (c) 2017-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -44,7 +44,7 @@ vcpu_find(struct tcb *const tcp, int fd)
 static struct vcpu_info *
 vcpu_alloc(struct tcb *const tcp, int fd, int cpuid)
 {
-	struct vcpu_info *vcpu_info = xcalloc(1, sizeof(*vcpu_info));
+	struct vcpu_info *vcpu_info = xzalloc(sizeof(*vcpu_info));
 
 	vcpu_info->fd = fd;
 	vcpu_info->cpuid = cpuid;
@@ -76,10 +76,9 @@ vcpu_register(struct tcb *const tcp, int fd, int cpuid)
 
 	struct vcpu_info *vcpu_info = vcpu_find(tcp, fd);
 
-	if (!vcpu_info)
-		vcpu_info = vcpu_alloc(tcp, fd, cpuid);
-	else if (vcpu_info->cpuid != cpuid)
-	{
+	if (!vcpu_info) {
+		vcpu_alloc(tcp, fd, cpuid);
+	} else if (vcpu_info->cpuid != cpuid) {
 		vcpu_info->cpuid = cpuid;
 		vcpu_info->resolved = false;
 	}
@@ -309,7 +308,7 @@ kvm_ioctl_decode_check_extension(struct tcb *const tcp, const unsigned int code,
 				 const kernel_ulong_t arg)
 {
 	tprints(", ");
-	printxval_index(kvm_cap, arg, "KVM_CAP_???");
+	printxval64(kvm_cap, arg, "KVM_CAP_???");
 	return RVAL_IOCTL_DECODED;
 }
 
@@ -327,8 +326,7 @@ kvm_ioctl_run_attach_auxstr(struct tcb *const tcp,
 	if (umove(tcp, info->mmap_addr, &vcpu_run_struct) < 0)
 		return;
 
-	tcp->auxstr = xlat_idx(kvm_exit_reason, ARRAY_SIZE(kvm_exit_reason) - 1,
-			       vcpu_run_struct.exit_reason);
+	tcp->auxstr = xlookup(kvm_exit_reason, vcpu_run_struct.exit_reason);
 	if (!tcp->auxstr)
 		tcp->auxstr = "KVM_EXIT_???";
 }

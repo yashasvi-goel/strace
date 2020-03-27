@@ -2,7 +2,7 @@
  * Check decoding of ioprio_get and ioprio_set syscalls.
  *
  * Copyright (c) 2016 Eugene Syromyatnikov <evgsyr@gmail.com>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -10,7 +10,7 @@
 
 #include "tests.h"
 
-#include <asm/unistd.h>
+#include "scno.h"
 
 #if defined(__NR_ioprio_get) && defined(__NR_ioprio_set)
 
@@ -58,17 +58,12 @@ main(void)
 	errstr = sprintrc(rc);
 # if XLAT_RAW
 	printf("ioprio_get(0x1, 0) = %s\n", errstr);
-# elif XLAT_VERBOSE
-	printf("ioprio_get(0x1 /* IOPRIO_WHO_PROCESS */, 0) = %s", errstr);
-	if (rc >= 0) {
-		printf(" (IOPRIO_PRIO_VALUE(%u /* ", (unsigned int) rc >> 13);
-		printxval(ioprio_class, (unsigned int) rc >> 13,
-			  "IOPRIO_CLASS_???");
-		printf(" */, %u))", (unsigned int) rc & 0x1fff);
-	}
-	puts("");
 # else /* XLAT_ABBREV */
+#  if XLAT_VERBOSE
+	printf("ioprio_get(0x1 /* IOPRIO_WHO_PROCESS */, 0) = %s", errstr);
+#  else
 	printf("ioprio_get(IOPRIO_WHO_PROCESS, 0) = %s", errstr);
+#  endif
 	if (rc >= 0) {
 		printf(" (IOPRIO_PRIO_VALUE(");
 		printxval(ioprio_class, (unsigned int) rc >> 13,

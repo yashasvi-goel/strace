@@ -1,17 +1,19 @@
 #!/bin/sh -eu
 #
-# Copyright (c) 2014-2018 The strace developers.
+# Copyright (c) 2014-2020 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 ./m4/gen_bpf_attr_m4.sh
 ./generate_mpers_am.sh
+./types/gen.sh
 ./xlat/gen.sh
 ./tests/gen_pure_executables.sh
 ./tests/gen_tests.sh
 
 for m in m32 mx32; do
+	m_upper=$(echo $m|tr '[a-z]' '[A-Z]')
 	tests=tests-$m
 	rm -rf $tests
 	mkdir $tests
@@ -20,7 +22,8 @@ for m in m32 mx32; do
 	sed "s/@arch@/@arch_$m@/;
 	     s/^\\(SIZEOF_LONG$s=\\).*/\\1 4/; $k
 	     s/^MPERS_NAME$s=.*/& $m/;
-	     s/^MPERS_CC_FLAGS$s=.*/& @cc_flags_$m@/;
+	     s/^\\(CC$s=\\).*/\\1 @CC_FOR_${m_upper}@/;
+	     s/^MPERS_CC_FLAGS$s=.*/& @CFLAGS_FOR_${m_upper}@ @cc_flags_$m@/;
 	     s/^ARCH_MFLAGS$s=.*/& -DMPERS_IS_\$(MPERS_NAME) \$(MPERS_CC_FLAGS)/" \
 		tests/Makefile.am > $tests/Makefile.am
 	for f in tests/*; do

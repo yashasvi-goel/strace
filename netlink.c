@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2016 Fabien Siron <fabien.siron@epita.fr>
  * Copyright (c) 2016 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -13,6 +13,7 @@
 #include <linux/audit.h>
 #include <linux/rtnetlink.h>
 #include <linux/xfrm.h>
+#include "print_fields.h"
 #include "xlat/netlink_ack_flags.h"
 #include "xlat/netlink_delete_flags.h"
 #include "xlat/netlink_flags.h"
@@ -38,6 +39,10 @@
 #include "xlat/nl_sock_diag_types.h"
 #include "xlat/nl_xfrm_types.h"
 #include "xlat/nlmsgerr_attrs.h"
+
+# define XLAT_MACROS_ONLY
+#  include "xlat/crypto_msgs.h"
+# undef XLAT_MACROS_ONLY
 
 /*
  * Fetch a struct nlmsghdr from the given address.
@@ -80,11 +85,14 @@ get_fd_nl_family(struct tcb *const tcp, const int fd)
 	if (nl_details == details)
 		return -1;
 
-	const struct xlat *xlats = netlink_protocols;
-	for (; xlats->str; ++xlats) {
-		const char *name = STR_STRIP_PREFIX(xlats->str, "NETLINK_");
+	const struct xlat_data *xlats = netlink_protocols->data;
+	for (uint32_t idx = 0; idx < netlink_protocols->size; idx++) {
+		if (!netlink_protocols->data[idx].str)
+			continue;
+
+		const char *name = STR_STRIP_PREFIX(xlats[idx].str, "NETLINK_");
 		if (!strncmp(nl_details, name, strlen(name)))
-			return xlats->val;
+			return xlats[idx].val;
 	}
 
 	if (*nl_details >= '0' && *nl_details <= '9')
@@ -498,12 +506,7 @@ decode_nlmsgerr(struct tcb *const tcp,
 	if (umove_or_printaddr(tcp, addr, &err.error))
 		return;
 
-	tprints("{error=");
-	if (err.error < 0 && (unsigned) -err.error < nerrnos) {
-		tprintf("-%s", errnoent[-err.error]);
-	} else {
-		tprintf("%d", err.error);
-	}
+	PRINT_FIELD_ERR_D("{", err, error);
 
 	addr += offsetof(struct nlmsgerr, msg);
 	len -= offsetof(struct nlmsgerr, msg);
@@ -534,9 +537,7 @@ decode_nlmsgerr(struct tcb *const tcp,
 }
 
 static const netlink_decoder_t netlink_decoders[] = {
-#ifdef HAVE_LINUX_CRYPTOUSER_H
 	[NETLINK_CRYPTO] = decode_netlink_crypto,
-#endif
 #ifdef HAVE_LINUX_NETFILTER_NFNETLINK_H
 	[NETLINK_NETFILTER] = decode_netlink_netfilter,
 #endif

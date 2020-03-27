@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2014-2018 The strace developers.
+ * Copyright (c) 2014-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -32,6 +32,21 @@ sprint_ioprio(unsigned int ioprio)
 	xsprintf(outstr, "IOPRIO_PRIO_VALUE(%s, %d)", class_buf, data);
 
 	return outstr;
+}
+
+void
+print_ioprio(unsigned int ioprio)
+{
+	if (xlat_verbose(xlat_verbosity) != XLAT_STYLE_ABBREV)
+		tprintf("%#x", ioprio);
+
+	if (xlat_verbose(xlat_verbosity) == XLAT_STYLE_RAW)
+		return;
+
+	const char *str = sprint_ioprio(ioprio);
+
+	(xlat_verbose(xlat_verbosity) == XLAT_STYLE_VERBOSE
+		? tprints_comment : tprints)(str);
 }
 
 SYS_FUNC(ioprio_get)

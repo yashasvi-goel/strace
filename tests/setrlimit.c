@@ -2,13 +2,14 @@
  * Check decoding of setrlimit syscall.
  *
  * Copyright (c) 2016-2018 Dmitry V. Levin <ldv@altlinux.org>
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "tests.h"
-#include <asm/unistd.h>
+#include "scno.h"
 
 #ifdef __NR_setrlimit
 
@@ -18,9 +19,13 @@ int
 main(void)
 {
 	kernel_ulong_t *const rlimit = tail_alloc(sizeof(*rlimit) * 2);
-	const struct xlat *xlat;
+	const struct xlat_data *xlat;
+	size_t i = 0;
 
-	for (xlat = resources; xlat->str; ++xlat) {
+	for (xlat = resources->data, i = 0; i < resources->size; ++xlat, ++i) {
+		if (!xlat->str)
+			continue;
+
 		unsigned long res = 0xfacefeed00000000ULL | xlat->val;
 		long rc = syscall(__NR_setrlimit, res, 0);
 # if XLAT_RAW

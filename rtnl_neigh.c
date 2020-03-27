@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2016 Fabien Siron <fabien.siron@epita.fr>
  * Copyright (c) 2017 JingPiao Chen <chenjingpiao@gmail.com>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -58,7 +58,7 @@ decode_nda_cacheinfo(struct tcb *const tcp,
 
 static const nla_decoder_t ndmsg_nla_decoders[] = {
 	[NDA_DST]		= decode_neigh_addr,
-	[NDA_LLADDR]		= decode_neigh_addr,
+	[NDA_LLADDR]		= decode_nla_hwaddr_nofamily,
 	[NDA_CACHEINFO]		= decode_nda_cacheinfo,
 	[NDA_PROBES]		= decode_nla_u32,
 	[NDA_VLAN]		= decode_nla_u16,

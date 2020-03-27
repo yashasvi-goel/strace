@@ -165,7 +165,8 @@ decode_nla_str(struct tcb *const tcp,
 	       const unsigned int len,
 	       const void *const opaque_data)
 {
-	printstr_ex(tcp, addr, len, QUOTE_0_TERMINATED);
+	printstr_ex(tcp, addr, len,
+		    QUOTE_OMIT_TRAILING_0 | QUOTE_EXPECT_TRAILING_0);
 
 	return true;
 }
@@ -196,10 +197,8 @@ decode_nla_meminfo(struct tcb *const tcp,
 	unsigned int count = 0;
 	print_array_ex(tcp, addr, nmemb, &mem, sizeof(mem),
 		       tfetch_mem, print_uint32_array_member, &count,
-		       PAF_PRINT_INDICES | PAF_INDEX_XLAT_VALUE_INDEXED
-			| XLAT_STYLE_FMT_U,
-		       ARRSZ_PAIR(netlink_sk_meminfo_indices) - 1,
-		       "SK_MEMINFO_???");
+		       PAF_PRINT_INDICES | XLAT_STYLE_FMT_U,
+		       netlink_sk_meminfo_indices, "SK_MEMINFO_???");
 
 	return true;
 }
@@ -286,8 +285,7 @@ decode_nla_xval(struct tcb *const tcp,
 			data.val = opts->process_fn(data.val);
 		if (opts->prefix)
 			tprints(opts->prefix);
-		printxval_dispatch_ex(opts->xlat, opts->xlat_size, data.val,
-				      opts->dflt, opts->xt, opts->style);
+		printxval_ex(opts->xlat, data.val, opts->dflt, opts->style);
 		if (opts->suffix)
 			tprints(opts->suffix);
 	}
@@ -307,11 +305,9 @@ decode_nla_ether_proto(struct tcb *const tcp,
 		       const unsigned int len,
 		       const void *const opaque_data)
 {
-	const struct decode_nla_xlat_opts opts = {
+	static const struct decode_nla_xlat_opts opts = {
 		.xlat = ethernet_protocols,
-		.xlat_size = ethernet_protocols_size,
 		.dflt = "ETHER_P_???",
-		.xt = XT_SORTED,
 		.prefix = "htons(",
 		.suffix = ")",
 		.size = 2,
@@ -327,15 +323,33 @@ decode_nla_ip_proto(struct tcb *const tcp,
 		    const unsigned int len,
 		    const void *const opaque_data)
 {
-	const struct decode_nla_xlat_opts opts = {
+	static const struct decode_nla_xlat_opts opts = {
 		.xlat = inet_protocols,
-		.xlat_size = inet_protocols_size,
-		.xt = XT_SORTED,
 		.dflt = "IPPROTO_???",
 		.size = 1,
 	};
 
 	return decode_nla_xval(tcp, addr, len, &opts);
+}
+
+bool
+decode_nla_hwaddr(struct tcb *const tcp,
+		const kernel_ulong_t addr,
+		const unsigned int len,
+		const void *const opaque_data)
+{
+	if (len > MAX_ADDR_LEN)
+		return false;
+
+	uint8_t buf[len];
+	const uintptr_t arphrd = (uintptr_t) opaque_data;
+
+	if (!umoven_or_printaddr(tcp, addr, len, buf)) {
+		print_hwaddr("", buf, len, arphrd & NLA_HWADDR_FAMILY_OFFSET
+				? arphrd & ~NLA_HWADDR_FAMILY_OFFSET : -1U);
+	}
+
+	return true;
 }
 
 bool
@@ -389,10 +403,6 @@ decode_nla_flags(struct tcb *const tcp,
 		len = MIN(len, opts->size);
 
 	const size_t bytes_offs = is_bigendian ? sizeof(data) - len : 0;
-
-	if (opts->xt == XT_INDEXED)
-		error_func_msg("indexed xlats are currently incompatible with "
-			       "printflags");
 
 	if (!umoven_or_printaddr(tcp, addr, len, data.bytes + bytes_offs)) {
 		if (opts->process_fn)

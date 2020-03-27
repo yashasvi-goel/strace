@@ -4,7 +4,7 @@
  * Copyright (c) 1993, 1994, 1995, 1996 Rick Sladkey <jrs@world.std.com>
  * Copyright (c) 1996-2000 Wichert Akkerman <wichert@cistron.nl>
  * Copyright (c) 2005-2016 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2020 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -41,7 +41,7 @@
 #include "xlat/bluetooth_l2_psm.h"
 #include "xlat/hci_channels.h"
 
-#define SIZEOF_SA_FAMILY sizeof(((struct sockaddr *) 0)->sa_family)
+#define SIZEOF_SA_FAMILY sizeof_field(struct sockaddr, sa_family)
 
 const size_t arp_hardware_types_size = ARRAY_SIZE(arp_hardware_types) - 1;
 const size_t ethernet_protocols_size = ARRAY_SIZE(ethernet_protocols) - 1;
@@ -433,8 +433,8 @@ print_sll_protocol(const struct sockaddr_ll *const sa_ll)
 		tprints(" /* ");
 
 	tprints("htons(");
-	printxval_search_ex(ethernet_protocols, ntohs(sa_ll->sll_protocol),
-			    "ETH_P_???", XLAT_STYLE_ABBREV);
+	printxval_ex(ethernet_protocols, ntohs(sa_ll->sll_protocol),
+		     "ETH_P_???", XLAT_STYLE_ABBREV);
 	tprints(")");
 
 	if (x_style == XLAT_STYLE_VERBOSE)
@@ -449,9 +449,9 @@ print_sockaddr_data_ll(const void *const buf, const int addrlen)
 	print_sll_protocol(sa_ll);
 	PRINT_FIELD_IFINDEX(", ", *sa_ll, sll_ifindex);
 	tprints(", sll_hatype=");
-	printxval_search(arp_hardware_types, sa_ll->sll_hatype, "ARPHRD_???");
+	printxval(arp_hardware_types, sa_ll->sll_hatype, "ARPHRD_???");
 	tprints(", sll_pkttype=");
-	printxval_index(af_packet_types, sa_ll->sll_pkttype, "PACKET_???");
+	printxval(af_packet_types, sa_ll->sll_pkttype, "PACKET_???");
 	tprintf(", sll_halen=%u", sa_ll->sll_halen);
 	if (sa_ll->sll_halen) {
 		const unsigned int oob_halen =
@@ -599,12 +599,21 @@ print_sockaddr_data_bt(const void *const buf, const int addrlen)
 	};
 
 	switch (addrlen) {
+	case offsetofend(struct sockaddr_hci, hci_dev):
 	case sizeof(struct sockaddr_hci): {
 		const struct sockaddr_hci *const hci = buf;
-		tprintf("hci_dev=htobs(%hu), hci_channel=",
-			btohs(hci->hci_dev));
-		printxval_index(hci_channels, hci->hci_channel,
-				"HCI_CHANNEL_???");
+		tprintf("hci_dev=htobs(%hu)", btohs(hci->hci_dev));
+
+		/*
+		 * hci_channel field has been introduced
+		 * Linux commit in v2.6.38-rc1~476^2~14^2~3^2~43^2~9.
+		 */
+		if (addrlen == sizeof(struct sockaddr_hci)) {
+			tprints(", hci_channel=");
+			printxval(hci_channels, hci->hci_channel,
+				  "HCI_CHANNEL_???");
+		}
+
 		break;
 	}
 	case sizeof(struct sockaddr_sco): {
@@ -630,8 +639,8 @@ print_sockaddr_data_bt(const void *const buf, const int addrlen)
 
 		if (addrlen == sizeof(struct sockaddr_l2)) {
 			tprints(", l2_bdaddr_type=");
-			printxval_index(bdaddr_types, l2->l2_bdaddr_type,
-					"BDADDR_???");
+			printxval(bdaddr_types, l2->l2_bdaddr_type,
+				  "BDADDR_???");
 		}
 
 		break;
@@ -665,7 +674,7 @@ print_sockaddr(const void *const buf, const int addrlen)
 	const struct sockaddr *const sa = buf;
 
 	tprints("{sa_family=");
-	printxval_index(addrfams, sa->sa_family, "AF_???");
+	printxval(addrfams, sa->sa_family, "AF_???");
 
 	if (addrlen > (int) SIZEOF_SA_FAMILY) {
 		tprints(", ");

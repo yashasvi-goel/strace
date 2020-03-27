@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015-2018 Dmitry V. Levin <ldv@altlinux.org>
+ * Copyright (c) 2018-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -45,21 +46,26 @@ struct BPF_MAP_CREATE_struct {
 	uint32_t numa_node;
 	char     map_name[BPF_OBJ_NAME_LEN];
 	uint32_t map_ifindex;
+	uint32_t btf_fd;
+	uint32_t btf_key_type_id;
+	uint32_t btf_value_type_id;
+	uint32_t btf_vmlinux_value_type_id;
 };
 
 # define BPF_MAP_CREATE_struct_size \
 	sizeof(struct BPF_MAP_CREATE_struct)
-# define expected_BPF_MAP_CREATE_struct_size 48
+# define expected_BPF_MAP_CREATE_struct_size 64
 
 struct BPF_MAP_LOOKUP_ELEM_struct {
 	uint32_t map_fd;
 	uint64_t ATTRIBUTE_ALIGNED(8) key;
 	uint64_t ATTRIBUTE_ALIGNED(8) value;
+	uint64_t ATTRIBUTE_ALIGNED(8) flags;
 };
 
 # define BPF_MAP_LOOKUP_ELEM_struct_size \
 	sizeof(struct BPF_MAP_LOOKUP_ELEM_struct)
-# define expected_BPF_MAP_LOOKUP_ELEM_struct_size 24
+# define expected_BPF_MAP_LOOKUP_ELEM_struct_size 32
 
 struct BPF_MAP_UPDATE_ELEM_struct {
 	uint32_t map_fd;
@@ -91,6 +97,14 @@ struct BPF_MAP_GET_NEXT_KEY_struct {
 	sizeof(struct BPF_MAP_GET_NEXT_KEY_struct)
 # define expected_BPF_MAP_GET_NEXT_KEY_struct_size 24
 
+struct BPF_MAP_FREEZE_struct {
+	uint32_t map_fd;
+};
+
+# define BPF_MAP_FREEZE_struct_size \
+	sizeof(struct BPF_MAP_FREEZE_struct)
+# define expected_BPF_MAP_FREEZE_struct_size 4
+
 struct BPF_PROG_LOAD_struct {
 	uint32_t prog_type;
 	uint32_t insn_cnt;
@@ -104,11 +118,20 @@ struct BPF_PROG_LOAD_struct {
 	char     prog_name[BPF_OBJ_NAME_LEN];
 	uint32_t prog_ifindex;
 	uint32_t expected_attach_type;
+	uint32_t prog_btf_fd;
+	uint32_t func_info_rec_size;
+	uint64_t ATTRIBUTE_ALIGNED(8) func_info;
+	uint32_t func_info_cnt;
+	uint32_t line_info_rec_size;
+	uint64_t ATTRIBUTE_ALIGNED(8) line_info;
+	uint32_t line_info_cnt;
+	uint32_t attach_btf_id;
+	uint32_t attach_prog_fd;
 };
 
 # define BPF_PROG_LOAD_struct_size \
-	offsetofend(struct BPF_PROG_LOAD_struct, expected_attach_type)
-# define expected_BPF_PROG_LOAD_struct_size 72
+	offsetofend(struct BPF_PROG_LOAD_struct, attach_prog_fd)
+# define expected_BPF_PROG_LOAD_struct_size 116
 
 struct BPF_OBJ_PIN_struct {
 	uint64_t ATTRIBUTE_ALIGNED(8) pathname;
@@ -128,11 +151,12 @@ struct BPF_PROG_ATTACH_struct {
 	uint32_t attach_bpf_fd;
 	uint32_t attach_type;
 	uint32_t attach_flags;
+	uint32_t replace_bpf_fd;
 };
 
 # define BPF_PROG_ATTACH_struct_size \
 	sizeof(struct BPF_PROG_ATTACH_struct)
-# define expected_BPF_PROG_ATTACH_struct_size 16
+# define expected_BPF_PROG_ATTACH_struct_size 20
 
 struct BPF_PROG_DETACH_struct {
 	uint32_t target_fd;
@@ -153,11 +177,15 @@ struct BPF_PROG_TEST_RUN_struct /* test */ {
 	uint64_t ATTRIBUTE_ALIGNED(8) data_out;
 	uint32_t repeat;
 	uint32_t duration;
+	uint32_t ctx_size_in;
+	uint32_t ctx_size_out;
+	uint64_t ATTRIBUTE_ALIGNED(8) ctx_in;
+	uint64_t ATTRIBUTE_ALIGNED(8) ctx_out;
 };
 
 # define BPF_PROG_TEST_RUN_struct_size \
 	sizeof(struct BPF_PROG_TEST_RUN_struct)
-# define expected_BPF_PROG_TEST_RUN_struct_size 40
+# define expected_BPF_PROG_TEST_RUN_struct_size 64
 
 struct BPF_PROG_GET_NEXT_ID_struct {
 	uint32_t start_id;
@@ -171,6 +199,9 @@ struct BPF_PROG_GET_NEXT_ID_struct {
 
 # define BPF_MAP_GET_NEXT_ID_struct BPF_PROG_GET_NEXT_ID_struct
 # define BPF_MAP_GET_NEXT_ID_struct_size BPF_PROG_GET_NEXT_ID_struct_size
+
+# define BPF_BTF_GET_NEXT_ID_struct BPF_PROG_GET_NEXT_ID_struct
+# define BPF_BTF_GET_NEXT_ID_struct_size BPF_PROG_GET_NEXT_ID_struct_size
 
 struct BPF_PROG_GET_FD_BY_ID_struct {
 	uint32_t prog_id;
@@ -224,6 +255,42 @@ struct BPF_RAW_TRACEPOINT_OPEN_struct /* raw_tracepoint */ {
 	offsetofend(struct BPF_RAW_TRACEPOINT_OPEN_struct, prog_fd)
 # define expected_BPF_RAW_TRACEPOINT_OPEN_struct_size 12
 
+struct BPF_BTF_LOAD_struct {
+	uint64_t ATTRIBUTE_ALIGNED(8) btf;
+	uint64_t ATTRIBUTE_ALIGNED(8) btf_log_buf;
+	uint32_t btf_size;
+	uint32_t btf_log_size;
+	uint32_t btf_log_level;
+};
+
+# define BPF_BTF_LOAD_struct_size \
+	offsetofend(struct BPF_BTF_LOAD_struct, btf_log_level)
+# define expected_BPF_BTF_LOAD_struct_size 28
+
+struct BPF_BTF_GET_FD_BY_ID_struct {
+	uint32_t btf_id;
+};
+
+# define BPF_BTF_GET_FD_BY_ID_struct_size \
+	sizeof(struct BPF_BTF_GET_FD_BY_ID_struct)
+# define expected_BPF_BTF_GET_FD_BY_ID_struct_size 4
+
+struct BPF_TASK_FD_QUERY_struct /* task_fd_query */ {
+	uint32_t pid;
+	uint32_t fd;
+	uint32_t flags;
+	uint32_t buf_len;
+	uint64_t ATTRIBUTE_ALIGNED(8) buf;
+	uint32_t prog_id;
+	uint32_t fd_type;
+	uint64_t ATTRIBUTE_ALIGNED(8) probe_offset;
+	uint64_t ATTRIBUTE_ALIGNED(8) probe_addr;
+};
+
+# define BPF_TASK_FD_QUERY_struct_size \
+	sizeof(struct BPF_TASK_FD_QUERY_struct)
+# define expected_BPF_TASK_FD_QUERY_struct_size 48
+
 struct bpf_map_info_struct {
 	uint32_t type;
 	uint32_t id;
@@ -233,17 +300,21 @@ struct bpf_map_info_struct {
 	uint32_t map_flags;
 	char     name[BPF_OBJ_NAME_LEN];
 	uint32_t ifindex;
+	uint32_t btf_vmlinux_value_type_id;
 	/*
 	 * The kernel UAPI is broken by Linux commit
 	 * v4.16-rc1~123^2~109^2~5^2~4 .
 	 */
 	uint64_t ATTRIBUTE_ALIGNED(8) netns_dev; /* skip check */
 	uint64_t ATTRIBUTE_ALIGNED(8) netns_ino; /* skip check */
+	uint32_t btf_id;
+	uint32_t btf_key_type_id;
+	uint32_t btf_value_type_id;
 };
 
 # define bpf_map_info_struct_size \
-	sizeof(struct bpf_map_info_struct)
-# define expected_bpf_map_info_struct_size 64
+	offsetofend(struct bpf_map_info_struct, btf_value_type_id)
+# define expected_bpf_map_info_struct_size 76
 
 struct bpf_prog_info_struct {
 	uint32_t type;
@@ -259,16 +330,35 @@ struct bpf_prog_info_struct {
 	uint64_t ATTRIBUTE_ALIGNED(8) map_ids;
 	char     name[BPF_OBJ_NAME_LEN];
 	uint32_t ifindex;
+	uint32_t gpl_compatible:1;
 	/*
 	 * The kernel UAPI is broken by Linux commit
 	 * v4.16-rc1~123^2~227^2~5^2~2 .
 	 */
 	uint64_t ATTRIBUTE_ALIGNED(8) netns_dev; /* skip check */
 	uint64_t ATTRIBUTE_ALIGNED(8) netns_ino; /* skip check */
+	uint32_t nr_jited_ksyms;
+	uint32_t nr_jited_func_lens;
+	uint64_t ATTRIBUTE_ALIGNED(8) jited_ksyms;
+	uint64_t ATTRIBUTE_ALIGNED(8) jited_func_lens;
+	uint32_t btf_id;
+	uint32_t func_info_rec_size;
+	uint64_t ATTRIBUTE_ALIGNED(8) func_info;
+	uint32_t nr_func_info;
+	uint32_t nr_line_info;
+	uint64_t ATTRIBUTE_ALIGNED(8) line_info;
+	uint64_t ATTRIBUTE_ALIGNED(8) jited_line_info;
+	uint32_t nr_jited_line_info;
+	uint32_t line_info_rec_size;
+	uint32_t jited_line_info_rec_size;
+	uint32_t nr_prog_tags;
+	uint64_t ATTRIBUTE_ALIGNED(8) prog_tags;
+	uint64_t ATTRIBUTE_ALIGNED(8) run_time_ns;
+	uint64_t ATTRIBUTE_ALIGNED(8) run_cnt;
 };
 
 # define bpf_prog_info_struct_size \
 	sizeof(struct bpf_prog_info_struct)
-# define expected_bpf_prog_info_struct_size 104
+# define expected_bpf_prog_info_struct_size 208
 
 #endif /* !STRACE_BPF_ATTR_H */

@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2015-2016 Dmitry V. Levin <ldv@altlinux.org>
  * Copyright (c) 2016 Eugene Syromyatnikov <evgsyr@gmail.com>
- * Copyright (c) 2015-2018 The strace developers.
+ * Copyright (c) 2015-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -11,7 +11,7 @@
 
 #include "tests.h"
 
-#include <asm/unistd.h>
+#include "scno.h"
 
 #if defined HAVE_SYS_FANOTIFY_H && defined HAVE_FANOTIFY_MARK && \
 	defined __NR_fanotify_mark
@@ -90,8 +90,8 @@ main(void)
 	};
 	static const struct strval flags[] = {
 		{ F8ILL_KULONG_MASK, "0" },
-		{ (kernel_ulong_t) 0xdec0deddefaced00ULL,
-			"0xefaced00"
+		{ (kernel_ulong_t) 0xdec0deddefacec00ULL,
+			"0xefacec00"
 # if !XLAT_RAW
 			" /* FAN_MARK_??? */"
 # endif
@@ -105,17 +105,18 @@ main(void)
 			"FAN_MARK_IGNORED_SURV_MODIFY"
 # endif
 			},
-		{ (kernel_ulong_t) 0xbadc0deddeadfeedULL,
+		{ (kernel_ulong_t) 0xbadc0deddeadffffULL,
 # if XLAT_RAW || XLAT_VERBOSE
-			"0xdeadfeed"
+			"0xdeadffff"
 # endif
 # if XLAT_VERBOSE
 			" /* "
 # endif
 # if !XLAT_RAW
-			"FAN_MARK_ADD|FAN_MARK_DONT_FOLLOW|FAN_MARK_ONLYDIR|"
-			"FAN_MARK_IGNORED_MASK|FAN_MARK_IGNORED_SURV_MODIFY|"
-			"FAN_MARK_FLUSH|0xdeadfe00"
+			"FAN_MARK_ADD|FAN_MARK_REMOVE|FAN_MARK_DONT_FOLLOW|"
+			"FAN_MARK_ONLYDIR|FAN_MARK_MOUNT|FAN_MARK_IGNORED_MASK|"
+			"FAN_MARK_IGNORED_SURV_MODIFY|FAN_MARK_FLUSH|"
+			"FAN_MARK_FILESYSTEM|0xdeadfe00"
 # endif
 # if XLAT_VERBOSE
 			" */"
@@ -124,23 +125,40 @@ main(void)
 	};
 	static const struct strval64 masks[] = {
 		{ ARG_ULL_STR(0) },
-		{ 0xdeadfeedfacebeefULL,
+		{ 0xdeadfeedffffffffULL,
 # if XLAT_RAW || XLAT_VERBOSE
-			"0xdeadfeedfacebeef"
+			"0xdeadfeedffffffff"
 # endif
 # if XLAT_VERBOSE
 			" /* "
 # endif
 # if !XLAT_RAW
-			"FAN_ACCESS|FAN_MODIFY|FAN_CLOSE_WRITE|FAN_OPEN|"
-			"FAN_OPEN_EXEC|FAN_ACCESS_PERM|FAN_OPEN_EXEC_PERM|"
-			"FAN_ONDIR|FAN_EVENT_ON_CHILD|0xdeadfeedb2c8aec4"
+			"FAN_ACCESS|"
+			"FAN_MODIFY|"
+			"FAN_ATTRIB|"
+			"FAN_CLOSE_WRITE|"
+			"FAN_CLOSE_NOWRITE|"
+			"FAN_OPEN|"
+			"FAN_MOVED_FROM|"
+			"FAN_MOVED_TO|"
+			"FAN_CREATE|"
+			"FAN_DELETE|"
+			"FAN_DELETE_SELF|"
+			"FAN_MOVE_SELF|"
+			"FAN_OPEN_EXEC|"
+			"FAN_Q_OVERFLOW|"
+			"FAN_OPEN_PERM|"
+			"FAN_ACCESS_PERM|"
+			"FAN_OPEN_EXEC_PERM|"
+			"FAN_ONDIR|"
+			"FAN_EVENT_ON_CHILD|"
+			"0xdeadfeedb7f8a000"
 # endif
 # if XLAT_VERBOSE
 			" */"
 # endif
 			},
-		{ ARG_ULL_STR(0xffffffffb7f8afc4)
+		{ ARG_ULL_STR(0xffffffffb7f8a000)
 # if !XLAT_RAW
 			" /* FAN_??? */"
 # endif

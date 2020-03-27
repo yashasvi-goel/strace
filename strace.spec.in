@@ -3,14 +3,25 @@ Name: strace
 Version: @PACKAGE_VERSION@
 Release: 1%{?dist}
 # The test suite is GPLv2+, all the rest is LGPLv2.1+.
-License: LGPL-2.1-or-later and GPL-2.0-or-later
+License: LGPL-2.1+ and GPL-2.0+
+# Some distros require Group tag to be present,
+# some require Group tag to be absent,
+# some do not care about Group tag at all,
+# and we have to cater for all of them.
+%if 0%{?fedora} < 28 && 0%{?centos} < 8 && 0%{?rhel} < 8 && 0%{?suse_version} < 1500
 Group: Development%{?suse_version:/Tools}/Debuggers
+%endif
 URL: https://strace.io
+%if 0%{?fedora} >= 12 || 0%{?centos} >= 6 || 0%{?rhel} >= 6 || 0%{?suse_version} >= 1200
 Source: https://strace.io/files/%{version}/strace-%{version}.tar.xz
+BuildRequires: xz
+%else
+Source: strace-%{version}.tar.gz
+%endif
 BuildRequires: gcc gzip
 
 # Install Bluetooth headers for AF_BLUETOOTH sockets decoding.
-%if 0%{?fedora} >= 18 || 0%{?centos} >= 8 || 0%{?rhel} >= 8 || 0%{?suse_version} >= 1200
+%if 0%{?fedora} >= 18 || 0%{?centos} >= 6 || 0%{?rhel} >= 8 || 0%{?suse_version} >= 1200
 BuildRequires: pkgconfig(bluez)
 %endif
 
@@ -76,7 +87,7 @@ wait
 %{buildroot}%{_bindir}/strace -V
 make %{?_smp_mflags} -k check VERBOSE=1
 echo 'BEGIN OF TEST SUITE INFORMATION'
-tail -n 99999 -- tests*/test-suite.log tests*/ksysent.log
+tail -n 99999 -- tests*/test-suite.log tests*/ksysent.gen.log
 find tests* -type f -name '*.log' -print0 |
 	xargs -r0 grep -H '^KERNEL BUG:' -- ||:
 echo 'END OF TEST SUITE INFORMATION'
@@ -91,6 +102,25 @@ echo 'END OF TEST SUITE INFORMATION'
 %changelog
 * @RPM_CHANGELOGTIME@ @PACKAGE_BUGREPORT@ - @PACKAGE_VERSION@-1
 - @PACKAGE_STRING@ snapshot.
+
+* Thu Feb 06 2020 Dmitry V. Levin <ldv@altlinux.org> - 5.5-1
+- v5.4 -> v5.5.
+
+* Thu Nov 28 2019 Dmitry V. Levin <ldv@altlinux.org> - 5.4-1
+- v5.3 -> v5.4.
+
+* Wed Sep 25 2019 Dmitry V. Levin <ldv@altlinux.org> - 5.3-1
+- v5.2 -> v5.3.
+
+* Fri Jul 12 2019 Dmitry V. Levin <ldv@altlinux.org> - 5.2-1
+- v5.1 -> v5.2.
+
+* Wed May 22 2019 Dmitry V. Levin <ldv@altlinux.org> - 5.1-1
+- v5.0 -> v5.1.
+
+* Tue Mar 19 2019 Dmitry V. Levin <ldv@altlinux.org> - 5.0-1
+- v4.26 -> v5.0 (resolves: #478419, #526740, #851457, #1609318,
+  #1610774, #1662936, #1676045).
 
 * Wed Dec 26 2018 Dmitry V. Levin <ldv@altlinux.org> - 4.26-1
 - v4.25 -> v4.26.

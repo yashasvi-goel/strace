@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -50,6 +50,21 @@
 #  define XLAT_VERBOSE 0
 # endif
 
+
+
+# if XLAT_RAW
+#  define XLAT_KNOWN(val_, str_) STRINGIFY_VAL(val_)
+#  define XLAT_UNKNOWN(val_, dflt_) STRINGIFY_VAL(val_)
+# elif XLAT_VERBOSE
+#  define XLAT_KNOWN(val_, str_) STRINGIFY_VAL(val_) " /* " str_ " */"
+#  define XLAT_UNKNOWN(val_, dflt_) STRINGIFY_VAL(val_) " /* " dflt_ " */"
+# else
+#  define XLAT_KNOWN(val_, str_) str_
+#  define XLAT_UNKNOWN(val_, dflt_) STRINGIFY_VAL(val_) " /* " dflt_ " */"
+# endif
+
+# define XLAT_STR(v_) sprintxlat(#v_, v_, NULL)
+
 # ifndef DEFAULT_STRLEN
 /* Default maximum # of bytes printed in printstr et al. */
 #  define DEFAULT_STRLEN 32
@@ -85,6 +100,12 @@ void perror_msg_and_skip(const char *, ...)
 
 /* Stat the specified file and skip the test if the stat call failed. */
 void skip_if_unavailable(const char *);
+
+/*
+ * Obtain an exclusive lock on dirname(path_name)/lock_name file
+ * using open and flock.
+ */
+int lock_file_by_dirname(const char *path_name, const char *lock_name);
 
 /*
  * Allocate memory that ends on the page boundary.
@@ -202,11 +223,48 @@ struct xlat;
 int printflags(const struct xlat *, const unsigned long long, const char *);
 
 /* Print constant in symbolic form according to xlat table. */
-int printxval(const struct xlat *, const unsigned long long, const char *);
+int printxval_abbrev(const struct xlat *, const unsigned long long,
+		     const char *);
+int printxval_raw(const struct xlat *, const unsigned long long, const char *);
+int printxval_verbose(const struct xlat *, const unsigned long long,
+		      const char *);
+
+/* Print constant in symbolic form according to xlat table. */
+const char *sprintxlat_abbrev(const char *, const unsigned long long,
+			   const char *);
+const char *sprintxlat_raw(const char *, const unsigned long long,
+			   const char *);
+const char *sprintxlat_verbose(const char *, const unsigned long long,
+			       const char *);
+
+/* Print constant in symbolic form according to xlat table. */
+const char *sprintxval_abbrev(const struct xlat *, const unsigned long long,
+			      const char *);
+const char *sprintxval_raw(const struct xlat *, const unsigned long long,
+			   const char *);
+const char *sprintxval_verbose(const struct xlat *, const unsigned long long,
+			       const char *);
+
+# if XLAT_RAW
+#  define printxval  printxval_raw
+#  define sprintxlat sprintxlat_raw
+#  define sprintxval sprintxval_raw
+# elif XLAT_VERBOSE
+#  define printxval  printxval_verbose
+#  define sprintxlat sprintxlat_verbose
+#  define sprintxval sprintxval_verbose
+# else
+#  define printxval  printxval_abbrev
+#  define sprintxlat sprintxlat_abbrev
+#  define sprintxval sprintxval_abbrev
+# endif
 
 /* Invoke a socket syscall, either directly or via __NR_socketcall. */
 int socketcall(const int nr, const int call,
 	       long a1, long a2, long a3, long a4, long a5);
+
+/* Call chdir and print strace output depending on flags. */
+void test_status_chdir(const char *dir, bool print_success, bool print_fail);
 
 /* Wrappers for recvmmsg and sendmmsg syscalls. */
 struct mmsghdr;
@@ -236,7 +294,7 @@ unsigned int ifindex_lo(void);
 /*
  * For 64-bit kernel_ulong_t and 32-bit pointer,
  * return a kernel_ulong_t value by filling higher bits.
- * For other architertures, return the original pointer.
+ * For other architectures, return the original pointer.
  */
 static inline kernel_ulong_t
 f8ill_ptr_to_kulong(const void *const ptr)

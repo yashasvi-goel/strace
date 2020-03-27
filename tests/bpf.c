@@ -2,7 +2,7 @@
  * Check bpf syscall decoding.
  *
  * Copyright (c) 2015-2017 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2015-2018 The strace developers.
+ * Copyright (c) 2015-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -16,7 +16,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <asm/unistd.h>
 #include "scno.h"
 
 #ifdef HAVE_LINUX_BPF_H
@@ -28,6 +27,8 @@
 
 #include "xlat.h"
 #include "xlat/bpf_commands.h"
+#include "xlat/bpf_map_types.h"
+#include "xlat/bpf_prog_types.h"
 
 #if defined MPERS_IS_m32 || SIZEOF_KERNEL_LONG_T > 4
 # define BIG_ADDR(addr64_, addr32_) addr64_
@@ -40,6 +41,10 @@
 #else
 # define BIG_ADDR(addr64_, addr32_) addr32_
 # define BIG_ADDR_MAYBE(addr_)
+#endif
+
+#ifndef FD0_PATH
+# define FD0_PATH ""
 #endif
 
 #ifndef HAVE_STRUCT_BPF_INSN
@@ -71,6 +76,10 @@ union bpf_attr_data {
 	BPF_ATTR_DATA_FIELD(BPF_OBJ_GET_INFO_BY_FD);
 	BPF_ATTR_DATA_FIELD(BPF_PROG_QUERY);
 	BPF_ATTR_DATA_FIELD(BPF_RAW_TRACEPOINT_OPEN);
+	BPF_ATTR_DATA_FIELD(BPF_BTF_LOAD);
+	BPF_ATTR_DATA_FIELD(BPF_BTF_GET_FD_BY_ID);
+	BPF_ATTR_DATA_FIELD(BPF_TASK_FD_QUERY);
+	BPF_ATTR_DATA_FIELD(BPF_MAP_FREEZE);
 	char char_data[256];
 };
 
@@ -105,8 +114,8 @@ sys_bpf(kernel_ulong_t cmd, kernel_ulong_t attr, kernel_ulong_t size)
 
 #ifdef INJECT_RETVAL
 	if (rc != INJECT_RETVAL)
-		error_msg_and_fail("Got a return value of %ld != %d",
-				   rc, INJECT_RETVAL);
+		error_msg_and_fail("Got a return value of %ld != %ld",
+				   rc, (long) INJECT_RETVAL);
 
 	static char inj_errstr[4096];
 
@@ -247,6 +256,8 @@ init_BPF_MAP_CREATE_attr7(struct bpf_attr_check *check)
 	attr->map_ifindex = ifindex_lo();
 }
 
+static_assert(ARRAY_SIZE(bpf_map_types_xdata) == 27,
+	      "The map_type for tests 1 and 2 below needs to be updated");
 static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 	{
 		.data = { .BPF_MAP_CREATE_data = { .map_type = 2 } },
@@ -256,7 +267,7 @@ static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 	},
 	{ /* 1 */
 		.data = { .BPF_MAP_CREATE_data = {
-			.map_type = 20,
+			.map_type = 26,
 			.key_size = 4,
 			.value_size = 8,
 			.max_entries = 256,
@@ -266,7 +277,7 @@ static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 			.map_name = "0123456789abcde",
 		} },
 		.size = offsetof(struct BPF_MAP_CREATE_struct, map_name) + 8,
-		.str = "map_type=BPF_MAP_TYPE_REUSEPORT_SOCKARRAY, key_size=4"
+		.str = "map_type=BPF_MAP_TYPE_STRUCT_OPS, key_size=4"
 		       ", value_size=8, max_entries=256"
 		       ", map_flags=BPF_F_NO_PREALLOC|BPF_F_NO_COMMON_LRU"
 				   "|BPF_F_NUMA_NODE|BPF_F_RDONLY|BPF_F_WRONLY"
@@ -278,21 +289,21 @@ static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 	},
 	{ /* 2 */
 		.data = { .BPF_MAP_CREATE_data = {
-			.map_type = 24,
+			.map_type = 27,
 			.key_size = 0xface1e55,
 			.value_size = 0xbadc0ded,
 			.max_entries = 0xbeefcafe,
-			.map_flags = 0xffffff80,
+			.map_flags = 0xfffff800,
 			.inner_map_fd = 2718281828,
 			.numa_node = -1,
 			.map_name = "",
 			.map_ifindex = 3141592653,
 		} },
 		.size = offsetofend(struct BPF_MAP_CREATE_struct, map_ifindex),
-		.str = "map_type=0x18 /* BPF_MAP_TYPE_??? */"
+		.str = "map_type=0x1b /* BPF_MAP_TYPE_??? */"
 		       ", key_size=4207812181, value_size=3134983661"
 		       ", max_entries=3203386110"
-		       ", map_flags=0xffffff80 /* BPF_F_??? */"
+		       ", map_flags=0xfffff800 /* BPF_F_??? */"
 		       ", inner_map_fd=-1576685468"
 		       ", map_name=\"\", map_ifindex=3141592653",
 
@@ -313,7 +324,8 @@ static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 		       ", max_entries=3203386110"
 		       ", map_flags=BPF_F_NO_PREALLOC|BPF_F_NUMA_NODE"
 				   "|BPF_F_RDONLY|BPF_F_STACK_BUILD_ID"
-				   "|0xc0dede80",
+				   "|BPF_F_RDONLY_PROG|BPF_F_CLONE"
+				   "|BPF_F_MMAPABLE|0xc0ded800",
 	},
 	{ /* 4 */
 		.data = { .BPF_MAP_CREATE_data = {
@@ -331,7 +343,8 @@ static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 		       ", max_entries=3203386110"
 		       ", map_flags=BPF_F_NO_PREALLOC|BPF_F_NUMA_NODE"
 				   "|BPF_F_RDONLY|BPF_F_STACK_BUILD_ID"
-				   "|0xc0dede80"
+				   "|BPF_F_RDONLY_PROG|BPF_F_CLONE"
+				   "|BPF_F_MMAPABLE|0xc0ded800"
 		       ", inner_map_fd=-1576685468",
 	},
 	{ /* 5 */
@@ -350,7 +363,8 @@ static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 		       ", max_entries=3203386110"
 		       ", map_flags=BPF_F_NO_PREALLOC|BPF_F_NUMA_NODE"
 				   "|BPF_F_RDONLY|BPF_F_STACK_BUILD_ID"
-				   "|0xc0dede80"
+				   "|BPF_F_RDONLY_PROG|BPF_F_CLONE"
+				   "|BPF_F_MMAPABLE|0xc0ded800"
 		       ", inner_map_fd=-1576685468"
 		       ", numa_node=4294967295 /* NUMA_NO_NODE */",
 	},
@@ -371,7 +385,8 @@ static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 		       ", max_entries=3203386110"
 		       ", map_flags=BPF_F_NO_PREALLOC|BPF_F_NUMA_NODE"
 				   "|BPF_F_RDONLY|BPF_F_STACK_BUILD_ID"
-				   "|0xc0dede80"
+				   "|BPF_F_RDONLY_PROG|BPF_F_CLONE"
+				   "|BPF_F_MMAPABLE|0xc0ded800"
 		       ", inner_map_fd=-1576685468"
 		       ", numa_node=4294967295 /* NUMA_NO_NODE */"
 		       ", map_name=\"fedcba987654321\"...",
@@ -393,12 +408,55 @@ static struct bpf_attr_check BPF_MAP_CREATE_checks[] = {
 		       ", max_entries=3203386110"
 		       ", map_flags=BPF_F_NO_PREALLOC|BPF_F_NUMA_NODE"
 				   "|BPF_F_RDONLY|BPF_F_STACK_BUILD_ID"
-				   "|0xc0dede80"
+				   "|BPF_F_RDONLY_PROG|BPF_F_CLONE"
+				   "|BPF_F_MMAPABLE|0xc0ded800"
 		       ", inner_map_fd=-1576685468"
 		       ", numa_node=4294967295 /* NUMA_NO_NODE */"
 		       ", map_name=\"0123456789abcde\""
 		       ", map_ifindex=" IFINDEX_LO_STR,
 		.init_fn = init_BPF_MAP_CREATE_attr7,
+	},
+	{ /* 8 */
+		.data = { .BPF_MAP_CREATE_data = {
+			.btf_fd = 0xbadc0ded,
+			.btf_key_type_id = 0xfacefeed,
+			.btf_value_type_id = 0xcafef00d
+		} },
+		.size = offsetofend(struct BPF_MAP_CREATE_struct,
+				    btf_value_type_id),
+		.str = "map_type=BPF_MAP_TYPE_UNSPEC"
+		       ", key_size=0"
+		       ", value_size=0"
+		       ", max_entries=0"
+		       ", map_flags=0"
+		       ", inner_map_fd=0" FD0_PATH
+		       ", map_name=\"\""
+		       ", map_ifindex=0"
+		       ", btf_fd=-1159983635"
+		       ", btf_key_type_id=4207869677"
+		       ", btf_value_type_id=3405705229"
+	},
+	{ /* 9 */
+		.data = { .BPF_MAP_CREATE_data = {
+			.btf_fd = 0xbadc0ded,
+			.btf_key_type_id = 0xfacefeed,
+			.btf_value_type_id = 0xcafef00d,
+			.btf_vmlinux_value_type_id = 0xdeadc0de,
+		} },
+		.size = offsetofend(struct BPF_MAP_CREATE_struct,
+				    btf_vmlinux_value_type_id),
+		.str = "map_type=BPF_MAP_TYPE_UNSPEC"
+		       ", key_size=0"
+		       ", value_size=0"
+		       ", max_entries=0"
+		       ", map_flags=0"
+		       ", inner_map_fd=0" FD0_PATH
+		       ", map_name=\"\""
+		       ", map_ifindex=0"
+		       ", btf_fd=-1159983635"
+		       ", btf_key_type_id=4207869677"
+		       ", btf_value_type_id=3405705229"
+		       ", btf_vmlinux_value_type_id=3735929054"
 	},
 };
 
@@ -412,12 +470,16 @@ static const struct bpf_attr_check BPF_MAP_LOOKUP_ELEM_checks[] = {
 		.data = { .BPF_MAP_LOOKUP_ELEM_data = {
 			.map_fd = -1,
 			.key = 0xdeadbeef,
-			.value = 0xbadc0ded
+			.value = 0xbadc0ded,
+			.flags = 4
 		} },
-		.size = offsetofend(struct BPF_MAP_LOOKUP_ELEM_struct, value),
+		.size = offsetofend(struct BPF_MAP_LOOKUP_ELEM_struct, flags),
 		.str = "map_fd=-1, key=0xdeadbeef, value=0xbadc0ded"
+		       ", flags=BPF_F_LOCK"
 	}
 };
+
+#define BPF_MAP_LOOKUP_AND_DELETE_ELEM_checks BPF_MAP_LOOKUP_ELEM_checks
 
 static const struct bpf_attr_check BPF_MAP_UPDATE_ELEM_checks[] = {
 	{
@@ -468,6 +530,14 @@ static const struct bpf_attr_check BPF_MAP_GET_NEXT_KEY_checks[] = {
 		} },
 		.size = offsetofend(struct BPF_MAP_GET_NEXT_KEY_struct, next_key),
 		.str = "map_fd=-1, key=0xdeadbeef, next_key=0xbadc0ded"
+	}
+};
+
+static const struct bpf_attr_check BPF_MAP_FREEZE_checks[] = {
+	{
+		.data = { .BPF_MAP_FREEZE_data = { .map_fd = -1 } },
+		.size = offsetofend(struct BPF_MAP_FREEZE_struct, map_fd),
+		.str = "map_fd=-1"
 	}
 };
 
@@ -531,7 +601,7 @@ print_BPF_PROG_LOAD_attr3(const struct bpf_attr_check *check, unsigned long addr
 	       ", insns=" INSNS_FMT ", license=\"%s\", log_level=2718281828"
 	       ", log_size=%u, log_buf=%p"
 	       ", kern_version=KERNEL_VERSION(51966, 240, 13)"
-	       ", prog_flags=0x4 /* BPF_F_??? */"
+	       ", prog_flags=0x10 /* BPF_F_??? */"
 	       ", prog_name=\"0123456789abcde\"..., prog_ifindex=3203399405",
 	       (unsigned int) ARRAY_SIZE(insns), INSNS_ARG, license,
 	       log_buf_size, get_log_buf_tail());
@@ -557,13 +627,16 @@ print_BPF_PROG_LOAD_attr4(const struct bpf_attr_check *check, unsigned long addr
 	       ", license=\"%s\", log_level=2718281828, log_size=4"
 	       ", log_buf=\"log \"..."
 	       ", kern_version=KERNEL_VERSION(51966, 240, 13)"
-	       ", prog_flags=BPF_F_STRICT_ALIGNMENT|BPF_F_ANY_ALIGNMENT|0x4"
+	       ", prog_flags=BPF_F_STRICT_ALIGNMENT|BPF_F_ANY_ALIGNMENT"
+	       "|BPF_F_TEST_RND_HI32|BPF_F_TEST_STATE_FREQ|0x10"
 	       ", prog_name=\"0123456789abcde\"..., prog_ifindex=%s"
 	       ", expected_attach_type=BPF_CGROUP_INET6_BIND",
 	       (unsigned int) ARRAY_SIZE(insns), INSNS_ARG,
 	       license, IFINDEX_LO_STR);
 }
 
+static_assert(ARRAY_SIZE(bpf_prog_types_xdata) == 29,
+	      "The prog_type for test 5 below needs to be updated");
 static struct bpf_attr_check BPF_PROG_LOAD_checks[] = {
 	{
 		.data = { .BPF_PROG_LOAD_data = { .prog_type = 1 } },
@@ -573,7 +646,7 @@ static struct bpf_attr_check BPF_PROG_LOAD_checks[] = {
 	},
 	{ /* 1 */
 		.data = { .BPF_PROG_LOAD_data = {
-			.prog_type = 22,
+			.prog_type = 29,
 			.insn_cnt = 0xbadc0ded,
 			.insns = 0,
 			.license = 0,
@@ -584,7 +657,7 @@ static struct bpf_attr_check BPF_PROG_LOAD_checks[] = {
 			.prog_flags = 0,
 		} },
 		.size = offsetofend(struct BPF_PROG_LOAD_struct, prog_flags),
-		.str = "prog_type=0x16 /* BPF_PROG_TYPE_??? */"
+		.str = "prog_type=0x1d /* BPF_PROG_TYPE_??? */"
 		       ", insn_cnt=3134983661, insns=NULL, license=NULL"
 		       ", log_level=42, log_size=3141592653, log_buf=NULL"
 		       ", kern_version=KERNEL_VERSION(51966, 240, 13)"
@@ -604,7 +677,7 @@ static struct bpf_attr_check BPF_PROG_LOAD_checks[] = {
 			.prog_name = "fedcba987654321",
 		} },
 		.size = offsetofend(struct BPF_PROG_LOAD_struct, prog_name),
-		.str = "prog_type=BPF_PROG_TYPE_SK_REUSEPORT"
+		.str = "prog_type=BPF_PROG_TYPE_LIRC_MODE2"
 		       ", insn_cnt=3134983661"
 		       ", insns=" BIG_ADDR("0xffffffff00000000", "NULL")
 		       ", license=" BIG_ADDR("0xffffffff00000000", "NULL")
@@ -621,7 +694,7 @@ static struct bpf_attr_check BPF_PROG_LOAD_checks[] = {
 			.log_level = 2718281828U,
 			.log_size = log_buf_size,
 			.kern_version = 0xcafef00d,
-			.prog_flags = 4,
+			.prog_flags = 16,
 			.prog_name = "0123456789abcdef",
 			.prog_ifindex = 0xbeeffeed,
 		} },
@@ -636,7 +709,7 @@ static struct bpf_attr_check BPF_PROG_LOAD_checks[] = {
 			.log_level = 2718281828U,
 			.log_size = 4,
 			.kern_version = 0xcafef00d,
-			.prog_flags = 7,
+			.prog_flags = 0x1f,
 			.prog_name = "0123456789abcdef",
 			.expected_attach_type = 9,
 		} },
@@ -644,6 +717,68 @@ static struct bpf_attr_check BPF_PROG_LOAD_checks[] = {
 				    expected_attach_type),
 		.init_fn = init_BPF_PROG_LOAD_attr4,
 		.print_fn = print_BPF_PROG_LOAD_attr4
+	},
+	{ /* 5 */
+		.data = { .BPF_PROG_LOAD_data = {
+			.prog_type = 28,
+			.insn_cnt = 0xbadc0ded,
+			.insns = 0xffffffff00000000,
+			.license = 0xffffffff00000000,
+			.log_level = 2718281828U,
+			.log_size = log_buf_size,
+			.log_buf = 0xffffffff00000000,
+			.kern_version = 0xcafef00d,
+			.prog_flags = 1,
+			.prog_name = "fedcba987654321",
+		} },
+		.size = offsetofend(struct BPF_PROG_LOAD_struct, prog_name),
+		.str = "prog_type=BPF_PROG_TYPE_EXT"
+		       ", insn_cnt=3134983661"
+		       ", insns=" BIG_ADDR("0xffffffff00000000", "NULL")
+		       ", license=" BIG_ADDR("0xffffffff00000000", "NULL")
+		       ", log_level=2718281828, log_size=4096"
+		       ", log_buf=" BIG_ADDR("0xffffffff00000000", "NULL")
+		       ", kern_version=KERNEL_VERSION(51966, 240, 13)"
+		       ", prog_flags=BPF_F_STRICT_ALIGNMENT"
+		       ", prog_name=\"fedcba987654321\"",
+	},
+	{ /* 6 */
+		.data = { .BPF_PROG_LOAD_data = {
+			.prog_flags = 2,
+			.expected_attach_type = 17,
+			.prog_btf_fd = 0xbadc0ded,
+			.func_info_rec_size = 0xdad1bef2,
+			.func_info = 0xfac1fed2fac3fed4,
+			.func_info_cnt = 0xdad3bef4,
+			.line_info_rec_size = 0xdad5bef6,
+			.line_info = 0xfac5fed5fac7fed8,
+			.line_info_cnt = 0xdad7bef8,
+			.attach_btf_id = 0xdad7befa,
+			.attach_prog_fd = 0xbadc0def,
+		} },
+		.size = offsetofend(struct BPF_PROG_LOAD_struct,
+				    attach_prog_fd),
+		.str = "prog_type=BPF_PROG_TYPE_UNSPEC"
+		       ", insn_cnt=0"
+		       ", insns=NULL"
+		       ", license=NULL"
+		       ", log_level=0"
+		       ", log_size=0"
+		       ", log_buf=NULL"
+		       ", kern_version=KERNEL_VERSION(0, 0, 0)"
+		       ", prog_flags=BPF_F_ANY_ALIGNMENT"
+		       ", prog_name=\"\""
+		       ", prog_ifindex=0"
+		       ", expected_attach_type=BPF_FLOW_DISSECTOR"
+		       ", prog_btf_fd=-1159983635"
+		       ", func_info_rec_size=3671178994"
+		       ", func_info=0xfac1fed2fac3fed4"
+		       ", func_info_cnt=3671310068"
+		       ", line_info_rec_size=3671441142"
+		       ", line_info=0xfac5fed5fac7fed8"
+		       ", line_info_cnt=3671572216"
+		       ", attach_btf_id=3671572218"
+		       ", attach_prog_fd=-1159983633"
 	},
 };
 
@@ -658,7 +793,7 @@ static struct bpf_attr_check BPF_OBJ_PIN_checks[] = {
 	{
 		.data = { .BPF_OBJ_PIN_data = { .pathname = 0 } },
 		.size = offsetofend(struct BPF_OBJ_PIN_struct, pathname),
-		.str = "pathname=NULL, bpf_fd=0"
+		.str = "pathname=NULL, bpf_fd=0" FD0_PATH
 	},
 	{
 		.data = { .BPF_OBJ_PIN_data = {
@@ -666,7 +801,7 @@ static struct bpf_attr_check BPF_OBJ_PIN_checks[] = {
 		} },
 		.size = offsetofend(struct BPF_OBJ_PIN_struct, pathname),
 		.str = "pathname=" BIG_ADDR("0xffffffffffffffff", "0xffffffff")
-		       ", bpf_fd=0",
+		       ", bpf_fd=0" FD0_PATH,
 	},
 	{
 		.data = { .BPF_OBJ_PIN_data = { .bpf_fd = -1 } },
@@ -692,7 +827,7 @@ static const struct bpf_attr_check BPF_PROG_ATTACH_checks[] = {
 	{
 		.data = { .BPF_PROG_ATTACH_data = { .target_fd = -1 } },
 		.size = offsetofend(struct BPF_PROG_ATTACH_struct, target_fd),
-		.str = "target_fd=-1, attach_bpf_fd=0"
+		.str = "target_fd=-1, attach_bpf_fd=0" FD0_PATH
 		       ", attach_type=BPF_CGROUP_INET_INGRESS, attach_flags=0"
 	},
 	{
@@ -700,13 +835,28 @@ static const struct bpf_attr_check BPF_PROG_ATTACH_checks[] = {
 			.target_fd = -1,
 			.attach_bpf_fd = -2,
 			.attach_type = 2,
-			.attach_flags = 1
+			.attach_flags = 7
 		} },
 		.size = offsetofend(struct BPF_PROG_ATTACH_struct, attach_flags),
 		.str = "target_fd=-1, attach_bpf_fd=-2"
 		       ", attach_type=BPF_CGROUP_INET_SOCK_CREATE"
-		       ", attach_flags=BPF_F_ALLOW_OVERRIDE"
-	}
+		       ", attach_flags=BPF_F_ALLOW_OVERRIDE|BPF_F_ALLOW_MULTI"
+				       "|BPF_F_REPLACE"
+	},
+	{
+		.data = { .BPF_PROG_ATTACH_data = {
+			.target_fd = -1,
+			.attach_bpf_fd = -2,
+			.attach_type = 2,
+			.attach_flags = 0xf8,
+			.replace_bpf_fd = -3,
+		} },
+		.size = offsetofend(struct BPF_PROG_ATTACH_struct, replace_bpf_fd),
+		.str = "target_fd=-1, attach_bpf_fd=-2"
+		       ", attach_type=BPF_CGROUP_INET_SOCK_CREATE"
+		       ", attach_flags=0xf8 /* BPF_F_??? */"
+		       ", replace_bpf_fd=-3"
+	},
 };
 
 
@@ -751,6 +901,33 @@ static const struct bpf_attr_check BPF_PROG_TEST_RUN_checks[] = {
 		       ", data_in=0xfacef11dbadc2ded"
 		       ", data_out=0xfacef33dbadc4ded"
 		       ", repeat=4207410904, duration=4207541978}"
+	},
+	{
+		.data = { .BPF_PROG_TEST_RUN_data = {
+			.prog_fd = -1,
+			.retval = 0xfac1fed2,
+			.data_size_in = 0xfac3fed4,
+			.data_size_out = 0xfac5fed6,
+			.data_in = (uint64_t) 0xfacef11dbadc2dedULL,
+			.data_out = (uint64_t) 0xfacef33dbadc4dedULL,
+			.repeat = 0xfac7fed8,
+			.duration = 0xfac9feda,
+			.ctx_size_in = 0xfacbfedc,
+			.ctx_size_out = 0xfacdfede,
+			.ctx_in = (uint64_t) 0xfacef55dbadc6dedULL,
+			.ctx_out = (uint64_t) 0xfacef77dbadc8dedULL
+		} },
+		.size = offsetofend(struct BPF_PROG_TEST_RUN_struct, ctx_out),
+		.str = "test={prog_fd=-1, retval=4207017682"
+		       ", data_size_in=4207148756, data_size_out=4207279830"
+		       ", data_in=0xfacef11dbadc2ded"
+		       ", data_out=0xfacef33dbadc4ded"
+		       ", repeat=4207410904"
+		       ", duration=4207541978"
+		       ", ctx_size_in=4207673052"
+		       ", ctx_size_out=4207804126"
+		       ", ctx_in=0xfacef55dbadc6ded"
+		       ", ctx_out=0xfacef77dbadc8ded}"
 	}
 };
 
@@ -796,6 +973,7 @@ static const struct bpf_attr_check BPF_PROG_GET_NEXT_ID_checks[] = {
 };
 
 #define BPF_MAP_GET_NEXT_ID_checks BPF_PROG_GET_NEXT_ID_checks
+#define BPF_BTF_GET_NEXT_ID_checks BPF_PROG_GET_NEXT_ID_checks
 
 static const struct bpf_attr_check BPF_PROG_GET_FD_BY_ID_checks[] = {
 	{
@@ -894,8 +1072,8 @@ print_BPF_PROG_QUERY_attr4(const struct bpf_attr_check *check, unsigned long add
 	printf("query={target_fd=-1153374643"
 	       ", attach_type=0xfeedface /* BPF_??? */"
 	       ", query_flags=BPF_F_QUERY_EFFECTIVE|0xdeadf00c"
-	       ", attach_flags=BPF_F_ALLOW_MULTI|0xbeefcafc"
-#if defined(INJECT_RETVAL) && INJECT_RETVAL > 0
+	       ", attach_flags=BPF_F_ALLOW_MULTI|BPF_F_REPLACE|0xbeefcaf8"
+#if defined(INJECT_RETVAL)
 	       ", prog_ids=[0, 1, 4294967295, 2718281828], prog_cnt=4}"
 #else
 	       ", prog_ids=%p, prog_cnt=4}", prog_load_ids_ptr
@@ -922,8 +1100,8 @@ print_BPF_PROG_QUERY_attr5(const struct bpf_attr_check *check, unsigned long add
 	printf("query={target_fd=-1153374643"
 	       ", attach_type=0xfeedface /* BPF_??? */"
 	       ", query_flags=BPF_F_QUERY_EFFECTIVE|0xdeadf00c"
-	       ", attach_flags=BPF_F_ALLOW_MULTI|0xbeefcafc"
-#if defined(INJECT_RETVAL) && INJECT_RETVAL > 0
+	       ", attach_flags=BPF_F_ALLOW_MULTI|BPF_F_REPLACE|0xbeefcaf8"
+#if defined(INJECT_RETVAL)
 	       ", prog_ids=[0, 1, 4294967295, 2718281828, ... /* %p */]"
 	       ", prog_cnt=5}",
 	       prog_load_ids_ptr + ARRAY_SIZE(prog_load_ids)
@@ -958,17 +1136,17 @@ static struct bpf_attr_check BPF_PROG_QUERY_checks[] = {
 	{ /* 2 */
 		.data = { .BPF_PROG_QUERY_data = {
 			.target_fd = 3141592653U,
-			.attach_type = 18,
+			.attach_type = 26,
 			.query_flags = 0xfffffffe,
-			.attach_flags = 0xfffffffc,
+			.attach_flags = 0xfffffff8,
 			.prog_ids = 0xffffffffffffffffULL,
 			.prog_cnt = 2718281828,
 		} },
 		.size = offsetofend(struct BPF_PROG_QUERY_struct, prog_cnt),
 		.str = "query={target_fd=-1153374643"
-		       ", attach_type=0x12 /* BPF_??? */"
+		       ", attach_type=0x1a /* BPF_??? */"
 		       ", query_flags=0xfffffffe /* BPF_F_QUERY_??? */"
-		       ", attach_flags=0xfffffffc /* BPF_F_??? */"
+		       ", attach_flags=0xfffffff8 /* BPF_F_??? */"
 		       ", prog_ids="
 		       BIG_ADDR("0xffffffffffffffff", "0xffffffff")
 		       ", prog_cnt=2718281828}",
@@ -986,7 +1164,7 @@ static struct bpf_attr_check BPF_PROG_QUERY_checks[] = {
 		.str = "query={target_fd=-1153374643"
 		       ", attach_type=0xfeedface /* BPF_??? */"
 		       ", query_flags=BPF_F_QUERY_EFFECTIVE|0xdeadf00c"
-		       ", attach_flags=BPF_F_ALLOW_MULTI|0xbeefcafc"
+		       ", attach_flags=BPF_F_ALLOW_MULTI|BPF_F_REPLACE|0xbeefcaf8"
 		       ", prog_ids=" BIG_ADDR_MAYBE("0xffffffffffffffff") "[]"
 		       ", prog_cnt=0}",
 	},
@@ -1032,7 +1210,7 @@ static struct bpf_attr_check BPF_RAW_TRACEPOINT_OPEN_checks[] = {
 		.data = { .BPF_RAW_TRACEPOINT_OPEN_data = { .name = 0 } },
 		.size = offsetofend(struct BPF_RAW_TRACEPOINT_OPEN_struct,
 				    name),
-		.str = "raw_tracepoint={name=NULL, prog_fd=0}",
+		.str = "raw_tracepoint={name=NULL, prog_fd=0" FD0_PATH "}",
 	},
 	{ /* 1 */
 		.data = { .BPF_RAW_TRACEPOINT_OPEN_data = {
@@ -1055,6 +1233,86 @@ static struct bpf_attr_check BPF_RAW_TRACEPOINT_OPEN_checks[] = {
 		.str = "raw_tracepoint="
 		       "{name=\"0123456789qwertyuiop0123456789qw\"..."
 		       ", prog_fd=-559038737}",
+	}
+};
+
+static void
+init_BPF_BTF_LOAD_attr(struct bpf_attr_check *check)
+{
+	static const char sample_btf_data[] = "bPf\0daTum";
+
+	static char *btf_data;
+	if (!btf_data)
+		btf_data = tail_memdup(sample_btf_data,
+				       sizeof(sample_btf_data) - 1);
+
+	struct BPF_BTF_LOAD_struct *attr = &check->data.BPF_BTF_LOAD_data;
+	attr->btf = (uintptr_t) btf_data;
+}
+
+static struct bpf_attr_check BPF_BTF_LOAD_checks[] = {
+	{
+		.data = { .BPF_BTF_LOAD_data = { .btf = 0 } },
+		.size = offsetofend(struct BPF_BTF_LOAD_struct, btf),
+		.str = "btf=NULL, btf_log_buf=NULL, btf_size=0"
+		       ", btf_log_size=0, btf_log_level=0"
+	},
+	{ /* 1 */
+		.data = { .BPF_BTF_LOAD_data = {
+			.btf_log_buf = 0xfacefeeddeadbeefULL,
+			.btf_size = 9,
+			.btf_log_size = -1U,
+			.btf_log_level = 42
+		} },
+		.size = offsetofend(struct BPF_BTF_LOAD_struct, btf_log_level),
+		.init_fn = init_BPF_BTF_LOAD_attr,
+		.str = "btf=\"bPf\\0daTum\""
+		       ", btf_log_buf=0xfacefeeddeadbeef"
+		       ", btf_size=9"
+		       ", btf_log_size=4294967295"
+		       ", btf_log_level=42"
+	}
+};
+
+static const struct bpf_attr_check BPF_BTF_GET_FD_BY_ID_checks[] = {
+	{
+		.data = { .BPF_BTF_GET_FD_BY_ID_data = { .btf_id = 0xdeadbeef } },
+		.size = offsetofend(struct BPF_BTF_GET_FD_BY_ID_struct, btf_id),
+		.str = "btf_id=3735928559"
+	}
+};
+
+static const struct bpf_attr_check BPF_TASK_FD_QUERY_checks[] = {
+	{
+		.data = { .BPF_TASK_FD_QUERY_data = { .pid = 0xdeadbeef } },
+		.size = offsetofend(struct BPF_TASK_FD_QUERY_struct, pid),
+		.str = "task_fd_query={pid=3735928559, fd=0" FD0_PATH
+		       ", flags=0, buf_len=0, buf=NULL, prog_id=0"
+		       ", fd_type=BPF_FD_TYPE_RAW_TRACEPOINT"
+		       ", probe_offset=0, probe_addr=0}"
+	},
+	{ /* 1 */
+		.data = { .BPF_TASK_FD_QUERY_data = {
+			.pid = 0xcafef00d,
+			.fd = 0xdeadbeef,
+			.flags = 0xfacefeed,
+			.buf_len = 0xdefaced,
+			.buf = 0xfffffffffffffffe,
+			.prog_id = 0xbadc0ded,
+			.fd_type = 5,
+			.probe_offset = 0xfac1fed2fac3fed4,
+			.probe_addr = 0xfac5fed5fac7fed8
+		} },
+		.size = offsetofend(struct BPF_TASK_FD_QUERY_struct, probe_addr),
+		.str = "task_fd_query={pid=3405705229"
+		       ", fd=-559038737"
+		       ", flags=4207869677"
+		       ", buf_len=233811181"
+		       ", buf=" BIG_ADDR("0xfffffffffffffffe", "0xfffffffe")
+		       ", prog_id=3134983661"
+		       ", fd_type=BPF_FD_TYPE_URETPROBE"
+		       ", probe_offset=0xfac1fed2fac3fed4"
+		       ", probe_addr=0xfac5fed5fac7fed8}"
 	}
 };
 
@@ -1088,6 +1346,12 @@ main(void)
 		CHK(BPF_OBJ_GET_INFO_BY_FD),
 		CHK(BPF_PROG_QUERY),
 		CHK(BPF_RAW_TRACEPOINT_OPEN),
+		CHK(BPF_BTF_LOAD),
+		CHK(BPF_BTF_GET_FD_BY_ID),
+		CHK(BPF_TASK_FD_QUERY),
+		CHK(BPF_MAP_LOOKUP_AND_DELETE_ELEM),
+		CHK(BPF_MAP_FREEZE),
+		CHK(BPF_BTF_GET_NEXT_ID),
 	};
 
 	page_size = get_page_size();

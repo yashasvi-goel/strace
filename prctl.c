@@ -3,7 +3,7 @@
  * Copyright (c) 1996-2000 Wichert Akkerman <wichert@cistron.nl>
  * Copyright (c) 2005-2007 Roland McGrath <roland@redhat.com>
  * Copyright (c) 2008-2015 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2014-2018 The strace developers.
+ * Copyright (c) 2014-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -104,6 +104,7 @@ SYS_FUNC(prctl)
 	case PR_GET_SECCOMP:
 	case PR_GET_TIMERSLACK:
 	case PR_GET_TIMING:
+	case PR_GET_TAGGED_ADDR_CTRL:
 		return RVAL_DECODED;
 
 	case PR_GET_CHILD_SUBREAPER:
@@ -241,6 +242,7 @@ SYS_FUNC(prctl)
 	case PR_SET_FPEXC:
 	case PR_SET_KEEPCAPS:
 	case PR_SET_TIMING:
+	case PR_SET_TAGGED_ADDR_CTRL:
 		tprintf(", %" PRI_klu, arg2);
 		return RVAL_DECODED;
 
@@ -367,6 +369,7 @@ SYS_FUNC(prctl)
 
 	case PR_SET_NO_NEW_PRIVS:
 	case PR_SET_THP_DISABLE:
+	case PR_SET_IO_FLUSHER:
 		tprintf(", %" PRI_klu, arg2);
 		print_prctl_args(tcp, 2);
 		return RVAL_DECODED;
@@ -409,6 +412,7 @@ SYS_FUNC(prctl)
 	case PR_GET_THP_DISABLE:
 	case PR_MPX_DISABLE_MANAGEMENT:
 	case PR_MPX_ENABLE_MANAGEMENT:
+	case PR_GET_IO_FLUSHER:
 	default:
 		print_prctl_args(tcp, 1);
 		return RVAL_DECODED;
@@ -433,8 +437,11 @@ SYS_FUNC(arch_prctl)
 		if (entering(tcp))
 			tprints(", ");
 		else
-			printnum_ptr(tcp, addr);
+			printnum_kptr(tcp, addr);
 		return 0;
+
+	case ARCH_GET_CPUID: /* has no arguments */
+		return RVAL_DECODED;
 	}
 
 	tprintf(", %#" PRI_klx, addr);

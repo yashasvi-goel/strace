@@ -1,5 +1,6 @@
 #!/bin/sh -efu
 # Copyright (c) 2018 Dmitry V. Levin <ldv@altlinux.org>
+# Copyright (c) 2018-2020 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
@@ -17,7 +18,6 @@ cat <<EOF
 # include "bpf_attr.h"
 # include "static_assert.h"
 
-# define SoM(type_, member_) (sizeof(((type_ *)0)->member_))
 EOF
 
 for struct in $(sed -n 's/^struct \([^[:space:]]\+_struct\) .*/\1/p' < "$input"); do
@@ -32,13 +32,13 @@ for struct in $(sed -n 's/^struct \([^[:space:]]\+_struct\) .*/\1/p' < "$input")
 	enum="$enum${enum:+.}"
 	ENUM="$ENUM${ENUM:+_}"
 	sed -n '/^struct '"$struct"' [^{]*{/,/^};$/p' < "$input" |
-	sed -n 's/^[[:space:]]\+[^][;]*[[:space:]]\([^][[:space:];]\+\)\(\[[^;]*\]\)\?;$/\1/p' |
+	sed -n 's/^[[:space:]]\+[^][;:]*[[:space:]]\([^][[:space:];:]\+\)\(\[[^;:]*\]\)\?;$/\1/p' |
 	while read field; do
 		FIELD="$(printf %s "$field" |tr '[:lower:]' '[:upper:]')"
 		cat <<EOF
 
 # ifdef HAVE_${TYPE_NAME}_$ENUM$FIELD
-	static_assert(SoM(struct $struct, $field) == SoM($type_name, $enum$field),
+	static_assert(sizeof_field(struct $struct, $field) == sizeof_field($type_name, $enum$field),
 		      "$struct.$field size mismatch");
 	static_assert(offsetof(struct $struct, $field) == offsetof($type_name, $enum$field),
 		      "$struct.$field offset mismatch");

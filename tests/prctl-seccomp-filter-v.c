@@ -2,7 +2,7 @@
  * Check verbose decoding of prctl PR_SET_SECCOMP SECCOMP_MODE_FILTER.
  *
  * Copyright (c) 2015-2016 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -13,18 +13,14 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
-#include <asm/unistd.h>
-
-#ifdef HAVE_PRCTL
-# include <sys/prctl.h>
-#endif
+#include <sys/prctl.h>
 #ifdef HAVE_LINUX_SECCOMP_H
 # include <linux/seccomp.h>
 #endif
 #include <linux/filter.h>
+#include "scno.h"
 
-#if defined HAVE_PRCTL \
- && defined PR_SET_NO_NEW_PRIVS \
+#if defined PR_SET_NO_NEW_PRIVS \
  && defined PR_SET_SECCOMP \
  && defined SECCOMP_MODE_FILTER \
  && defined SECCOMP_RET_ERRNO \
@@ -43,14 +39,14 @@
 		BPF_STMT(BPF_RET|BPF_K, SECCOMP_RET_KILL)
 
 # define PRINT_ALLOW_SYSCALL(nr) \
-	printf("BPF_JUMP(BPF_JMP|BPF_K|BPF_JEQ, %#x, 0, 0x1), " \
+	printf("BPF_JUMP(BPF_JMP|BPF_K|BPF_JEQ, %#lx, 0, 0x1), " \
 	       "BPF_STMT(BPF_RET|BPF_K, SECCOMP_RET_ALLOW), ", \
-	       __NR_ ## nr)
+	       (long) __NR_ ## nr)
 
 # define PRINT_DENY_SYSCALL(nr, err) \
-	printf("BPF_JUMP(BPF_JMP|BPF_K|BPF_JEQ, %#x, 0, 0x1), " \
+	printf("BPF_JUMP(BPF_JMP|BPF_K|BPF_JEQ, %#lx, 0, 0x1), " \
 	       "BPF_STMT(BPF_RET|BPF_K, SECCOMP_RET_ERRNO|%#x), ", \
-	       __NR_ ## nr, err)
+	       (long) __NR_ ## nr, err)
 
 static const struct sock_filter filter[] = {
 	/* load syscall number */
@@ -117,7 +113,7 @@ main(void)
 
 #else
 
-SKIP_MAIN_UNDEFINED("HAVE_PRCTL && PR_SET_NO_NEW_PRIVS && PR_SET_SECCOMP"
+SKIP_MAIN_UNDEFINED("PR_SET_NO_NEW_PRIVS && PR_SET_SECCOMP"
 		    " && SECCOMP_MODE_FILTER && SECCOMP_RET_ERRNO"
 		    " && BPF_JUMP && BPF_STMT")
 

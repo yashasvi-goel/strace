@@ -2,7 +2,7 @@
  * Check decoding and dumping of read and write syscalls.
  *
  * Copyright (c) 2016 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <asm/unistd.h>
+#include "scno.h"
 
 static void
 dump_str_ex(const char *str, const unsigned int len, const int idx_w)
@@ -270,9 +270,11 @@ main(void)
 	if (open("/dev/null", O_WRONLY) != 1)
 		perror_msg_and_fail("open");
 
+	(void) close(4);
 	if (open("/dev/zero", O_RDONLY) != 4)
 		perror_msg_and_fail("open");
 
+	(void) close(5);
 	if (open("/dev/null", O_WRONLY) != 5)
 		perror_msg_and_fail("open");
 

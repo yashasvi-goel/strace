@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Copyright (c) 2011-2016 Dmitry V. Levin <ldv@altlinux.org>
-# Copyright (c) 2011-2018 The strace developers.
+# Copyright (c) 2011-2020 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -11,12 +11,40 @@ ME_="${0##*/}"
 LOG="log"
 OUT="out"
 EXP="exp"
+CONFIG_H="../../config.h"
 
 warn_() { printf >&2 '%s\n' "$*"; }
 fail_() { warn_ "$ME_: failed test: $*"; exit 1; }
 skip_() { warn_ "$ME_: skipped test: $*"; exit 77; }
 framework_failure_() { warn_ "$ME_: framework failure: $*"; exit 99; }
 framework_skip_() { warn_ "$ME_: framework skip: $*"; exit 77; }
+
+# get_config_str OPTION
+#
+# Returns the value of OPTION from config.h (path to which set
+# in the CONFIG_H variable).
+get_config_str()
+{
+	sed -r -n 's/#define[[:space:]]*'"$1"'[[:space:]]*"([^"]*)".*/\1/p' \
+		"$CONFIG_H"
+}
+
+# get_config_option OPTION YES_STRING [NO_STRING]
+#
+# Returns YES_STRING in case OPTION is enabled (present in config.h and has
+# a non-zero numeric value). Otherwise, NO_STRING (or empty string, if not
+# specified) is returned.
+get_config_option()
+{
+	local opt
+	opt=$(sed -r -n 's/#define[[:space:]]*'"$1"'[[:space:]]*([0-9]+)$/\1/p' \
+		"$CONFIG_H")
+	if [ -n "$opt" -a "$opt" -ne 0 ]; then
+		printf "%s" "$2"
+	else
+		printf "%s" "${3-}"
+	fi
+}
 
 check_prog()
 {
@@ -191,7 +219,8 @@ match_grep()
 			printf '#%d: %s\n' "$cnt" "$pattern"
 		}
 		cnt=$(($cnt + 1))
-	done < "$patterns"
+	done < "$patterns" ||
+		fail_ "Error reading patterns from \"$patterns\""
 	test -z "$failed" || {
 		echo 'Actual output:'
 		cat < "$output"
@@ -203,7 +232,7 @@ match_grep()
 run_strace_match_diff()
 {
 	args="$*"
-	[ -n "$args" -a -z "${args##*-e trace=*}" ] ||
+	[ -n "$args" -a \( -z "${args##*-e trace=*}" -o -z "${args##*--trace=*}" \) ] ||
 		set -- -e trace="$NAME" "$@"
 	run_prog > /dev/null
 	run_strace "$@" $args > "$EXP"
@@ -214,7 +243,7 @@ run_strace_match_diff()
 run_strace_match_grep()
 {
 	args="$*"
-	[ -n "$args" -a -z "${args##*-e trace=*}" ] ||
+	[ -n "$args" -a \( -z "${args##*-e trace=*}" -o -z "${args##*--trace=*}" \) ] ||
 		set -- -e trace="$NAME" "$@"
 	run_prog > /dev/null
 	run_strace "$@" $args > "$EXP"
@@ -245,6 +274,20 @@ require_min_kernel_version_or_skip()
 	[ "$(kernel_version_code "$uname_r")" -ge \
 	  "$(kernel_version_code "$1")" ] ||
 		skip_ "the kernel release $uname_r is not $1 or newer"
+}
+
+# Usage: require_min_nproc 2
+require_min_nproc()
+{
+	local min_nproc
+	min_nproc="$1"; shift
+
+	check_prog nproc
+	local nproc
+	nproc="$(nproc)"
+
+	[ "$nproc" -ge "$min_nproc" ] ||
+		framework_skip_ "nproc = $nproc is less than $min_nproc"
 }
 
 # Usage: grep_pid_status $pid GREP-OPTIONS...
@@ -322,6 +365,11 @@ test_trace_expr()
 		"$subtrahend_regexp" > negative.list
 	test_pure_prog_set --expfile /dev/null -qq -esignal=none "$@" \
 		< negative.list
+}
+
+test_prog_set()
+{
+	test_pure_prog_set "$@" < "$srcdir/$NAME.in"
 }
 
 check_prog cat

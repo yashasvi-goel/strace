@@ -4,7 +4,7 @@
 # Copyright (c) 2006-2016 Dmitry V. Levin <ldv@altlinux.org>
 # Copyright (c) 2008-2015 Mike Frysinger <vapier@gentoo.org>
 # Copyright (c) 2015 Elvira Khabirova <lineprinter0@gmail.com>
-# Copyright (c) 2002-2018 The strace developers.
+# Copyright (c) 2002-2020 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
@@ -27,7 +27,7 @@ ARCH		= @arch@
 
 READELF		= @READELF@
 
-ACLOCAL_AMFLAGS = -I m4
+ACLOCAL_AMFLAGS = -I m4 -I types
 AM_CFLAGS = $(WARN_CFLAGS)
 AM_CPPFLAGS = -I$(builddir)/$(OS)/$(ARCH) \
 	      -I$(srcdir)/$(OS)/$(ARCH) \
@@ -39,6 +39,7 @@ AM_CPPFLAGS = -I$(builddir)/$(OS)/$(ARCH) \
 AM_CFLAGS_FOR_BUILD = $(WARN_CFLAGS_FOR_BUILD)
 AM_CPPFLAGS_FOR_BUILD = $(AM_CPPFLAGS)
 
+include types/Makemodule.am
 include xlat/Makemodule.am
 
 strace_CPPFLAGS = $(AM_CPPFLAGS)
@@ -129,9 +130,15 @@ strace_SOURCES =	\
 	file_ioctl.c	\
 	filter.h	\
 	filter_qualify.c \
+	filter_seccomp.c \
+	filter_seccomp.h \
 	flock.c		\
 	flock.h		\
 	fs_x_ioctl.c	\
+	fsconfig.c	\
+	fsmount.c	\
+	fsopen.c	\
+	fspick.c	\
 	futex.c		\
 	gcc_compat.h	\
 	get_personality.c \
@@ -145,6 +152,7 @@ strace_SOURCES =	\
 	inotify.c	\
 	inotify_ioctl.c	\
 	io.c		\
+	io_uring.c	\
 	ioctl.c		\
 	ioperm.c	\
 	iopl.c		\
@@ -156,6 +164,9 @@ strace_SOURCES =	\
 	ipc_shm.c	\
 	ipc_shmctl.c	\
 	kcmp.c		\
+	kernel_timespec.h \
+	kernel_timeval.h \
+	kernel_timex.h	\
 	kernel_types.h	\
 	kexec.c		\
 	keyctl.c	\
@@ -182,6 +193,7 @@ strace_SOURCES =	\
 	mmap_notify.h	\
 	mmsghdr.c	\
 	mount.c		\
+	move_mount.c	\
 	mpers_type.h	\
 	mq.c		\
 	msghdr.c	\
@@ -217,12 +229,14 @@ strace_SOURCES =	\
 	number_set.h	\
 	oldstat.c	\
 	open.c		\
+	open_tree.c	\
 	or1k_atomic.c	\
 	pathtrace.c	\
 	perf.c		\
 	perf_event_struct.h \
 	perf_ioctl.c	\
 	personality.c	\
+	pidfd_open.c	\
 	pkeys.c		\
 	poll.c		\
 	prctl.c		\
@@ -242,8 +256,13 @@ strace_SOURCES =	\
 	print_struct_stat.c \
 	print_time.c	\
 	print_timespec.c \
+	print_timespec.h \
+	print_timespec32.c \
+	print_timespec64.c \
 	print_timeval.c	\
+	print_timeval64.c \
 	print_timex.c	\
+	print_timex.h	\
 	print_utils.h	\
 	printmode.c	\
 	printrusage.c	\
@@ -300,6 +319,7 @@ strace_SOURCES =	\
 	socketutils.c	\
 	sparc.c		\
 	sram_alloc.c	\
+	stage_output.c	\
 	stat.c		\
 	stat.h		\
 	stat64.c	\
@@ -340,6 +360,7 @@ strace_SOURCES =	\
 	v4l2.c		\
 	wait.c		\
 	wait.h		\
+	watchdog_ioctl.c \
 	xattr.c		\
 	xfs_quota_stat.h \
 	xlat.c		\
@@ -347,10 +368,11 @@ strace_SOURCES =	\
 	xmalloc.c	\
 	xmalloc.h	\
 	xstring.h	\
+	$(TYPES_HEADER_FILES) \
 	$(strace_SOURCES_check) \
 	# end of strace_SOURCES
 
-strace_SOURCES_check = bpf_attr_check.c
+strace_SOURCES_check = bpf_attr_check.c $(TYPES_CHECK_FILES)
 
 if ENABLE_STACKTRACE
 strace_SOURCES += unwind.c unwind.h
@@ -396,6 +418,7 @@ EXTRA_DIST =				\
 	LGPL-2.1-or-later		\
 	README-configure		\
 	README-linux-ptrace		\
+	copyright-year-gen		\
 	debian/changelog		\
 	debian/compat			\
 	debian/control			\
@@ -410,14 +433,17 @@ EXTRA_DIST =				\
 	debian/strace64.install		\
 	debian/strace64.manpages	\
 	debian/watch			\
+	file-date-gen			\
 	gen_bpf_attr_check.sh		\
 	generate_sen.sh			\
+	git-version-gen			\
 	ioctl_iocdef.c			\
 	ioctlsort.c			\
 	linux/32/ioctls_inc.h		\
 	linux/32/ioctls_inc_align16.h	\
 	linux/32/ioctls_inc_align32.h	\
 	linux/32/ioctls_inc_align64.h	\
+	linux/32/syscallent-time32.h	\
 	linux/32/syscallent.h		\
 	linux/64/ioctls_inc.h		\
 	linux/64/syscallent.h		\
@@ -510,6 +536,16 @@ EXTRA_DIST =				\
 	linux/bfin/set_error.c		\
 	linux/bfin/set_scno.c		\
 	linux/bfin/syscallent.h		\
+	linux/csky/arch_regs.c		\
+	linux/csky/get_error.c		\
+	linux/csky/get_scno.c		\
+	linux/csky/get_syscall_args.c	\
+	linux/csky/ioctls_arch0.h	\
+	linux/csky/ioctls_inc0.h	\
+	linux/csky/raw_syscall.h	\
+	linux/csky/set_error.c		\
+	linux/csky/set_scno.c		\
+	linux/csky/syscallent.h		\
 	linux/bfin/userent.h		\
 	linux/check_scno.c		\
 	linux/dummy.h			\
@@ -563,7 +599,9 @@ EXTRA_DIST =				\
 	linux/ia64/rt_sigframe.h	\
 	linux/ia64/set_error.c		\
 	linux/ia64/set_scno.c		\
+	linux/ia64/shuffle_scno.c	\
 	linux/ia64/syscallent.h		\
+	linux/ia64/syscallent_base_nr.h	\
 	linux/ia64/userent.h		\
 	linux/inet_diag.h		\
 	linux/m68k/arch_defs_.h		\
@@ -692,27 +730,38 @@ EXTRA_DIST =				\
 	linux/powerpc64/syscallent.h	\
 	linux/powerpc64/syscallent1.h	\
 	linux/powerpc64/userent.h	\
+	linux/powerpc64le/arch_defs_.h	\
+	linux/powerpc64le/arch_regs.c	\
+	linux/powerpc64le/arch_rt_sigframe.c	\
+	linux/powerpc64le/errnoent.h	\
+	linux/powerpc64le/get_error.c	\
+	linux/powerpc64le/get_scno.c	\
+	linux/powerpc64le/get_syscall_args.c	\
+	linux/powerpc64le/ioctls_arch0.h	\
+	linux/powerpc64le/ioctls_inc0.h	\
+	linux/powerpc64le/raw_syscall.h	\
+	linux/powerpc64le/rt_sigframe.h	\
+	linux/powerpc64le/set_error.c	\
+	linux/powerpc64le/set_scno.c	\
+	linux/powerpc64le/syscallent.h	\
+	linux/powerpc64le/userent.h	\
 	linux/ptrace_pokeuser.c		\
 	linux/raw_syscall.h		\
-	linux/riscv/arch_defs_.h	\
-	linux/riscv/arch_get_personality.c \
-	linux/riscv/arch_regs.c		\
-	linux/riscv/get_error.c		\
-	linux/riscv/get_scno.c		\
-	linux/riscv/get_syscall_args.c	\
-	linux/riscv/ioctls_arch0.h	\
-	linux/riscv/ioctls_arch1.h	\
-	linux/riscv/ioctls_inc0.h	\
-	linux/riscv/ioctls_inc1.h	\
-	linux/riscv/raw_syscall.h	\
-	linux/riscv/set_error.c		\
-	linux/riscv/set_scno.c		\
-	linux/riscv/syscallent.h	\
-	linux/riscv/syscallent1.h	\
+	linux/riscv64/arch_regs.c		\
+	linux/riscv64/get_error.c		\
+	linux/riscv64/get_scno.c		\
+	linux/riscv64/get_syscall_args.c	\
+	linux/riscv64/ioctls_arch0.h	\
+	linux/riscv64/ioctls_inc0.h	\
+	linux/riscv64/raw_syscall.h	\
+	linux/riscv64/set_error.c		\
+	linux/riscv64/set_scno.c		\
+	linux/riscv64/syscallent.h	\
 	linux/rt_sigframe.h		\
 	linux/s390/arch_defs_.h		\
 	linux/s390/arch_regs.c		\
 	linux/s390/arch_sigreturn.c	\
+	linux/s390/check_scno.c		\
 	linux/s390/get_error.c		\
 	linux/s390/get_scno.c		\
 	linux/s390/get_syscall_args.c	\
@@ -730,6 +779,7 @@ EXTRA_DIST =				\
 	linux/s390x/arch_get_personality.c \
 	linux/s390x/arch_regs.c		\
 	linux/s390x/arch_sigreturn.c	\
+	linux/s390x/check_scno.c	\
 	linux/s390x/get_error.c		\
 	linux/s390x/get_scno.c		\
 	linux/s390x/get_syscall_args.c	\
@@ -819,7 +869,12 @@ EXTRA_DIST =				\
 	linux/sparc64/syscallent1.h	\
 	linux/sparc64/userent.h		\
 	linux/subcall.h			\
+	linux/subcall32.h		\
+	linux/subcall64.h		\
 	linux/syscall.h			\
+	linux/syscallent-common-32.h	\
+	linux/syscallent-common.h	\
+	linux/syscallent_base_nr.h	\
 	linux/tile/arch_defs_.h		\
 	linux/tile/arch_get_personality.c \
 	linux/tile/arch_regs.c		\
@@ -912,6 +967,8 @@ EXTRA_DIST =				\
 	strace-graph			\
 	strace-log-merge		\
 	strace.spec			\
+	types/find_last_type_fields.awk	\
+	types/gen.sh			\
 	$(XLAT_INPUT_FILES)		\
 	$(XLAT_HEADER_FILES)		\
 	xlat/gen.sh			\
@@ -942,6 +999,7 @@ sys_func.h: $(patsubst %,$(srcdir)/%,$(sys_func_h_sources))
 	done | sort -u > $@
 
 syscallent_names = subcall.h syscallent.h syscallent1.h \
+		   syscallent-common.h syscallent-common-32.h \
 		   syscallent-n32.h syscallent-n64.h syscallent-o32.h
 syscallent_patterns = $(patsubst %,\%/%,$(syscallent_names))
 syscallent_files = $(filter $(syscallent_patterns),$(EXTRA_DIST))
@@ -1031,8 +1089,8 @@ mpers_NAME =
 mpers_PREFIX = $(mpers_NAME)_
 mpers_DEFS = $(DEFS)
 mpers_INCLUDES = $(DEFAULT_INCLUDES) $(INCLUDES)
-mpers_CPPFLAGS = $(strace_CPPFLAGS) $(CPPFLAGS)
-mpers_sh_opts = $(mpers_DEFS) $(mpers_INCLUDES) $(mpers_CPPFLAGS)
+mpers_CPPFLAGS = $(CPPFLAGS)
+mpers_sh_opts = $(mpers_DEFS) $(mpers_INCLUDES) $(strace_CPPFLAGS) $(mpers_CPPFLAGS)
 libmpers_CPPFLAGS = $(strace_CPPFLAGS) -DIN_MPERS
 libmpers_CFLAGS = $(strace_CFLAGS)
 
@@ -1042,11 +1100,11 @@ mpers-m%.stamp: $(srcdir_mpers_source_files) | printers.h
 	for f in $^; do \
 		D="$(D)" \
 		READELF="$(READELF)" \
-		CC="$(CC)" \
+		CC="$(mpers_CC)" \
 		CFLAGS="$(mpers_sh_opts) -DMPERS_IS_$(mpers_NAME)" \
 		CPP="$(CPP)" \
 		CPPFLAGS="$(mpers_sh_opts) -DIN_MPERS -DMPERS_IS_$(mpers_NAME)" \
-		$(srcdir)/mpers.sh $(mpers_NAME) $(mpers_CC_FLAGS) $$f || exit; \
+		$(srcdir)/mpers.sh $(mpers_NAME) "$(mpers_CC_FLAGS)" $$f || exit; \
 	done
 	> $@
 
@@ -1117,7 +1175,9 @@ BUILT_SOURCES += $(mpers_m32_targets)
 CLEANFILES    += $(mpers_m32_targets)
 
 $(mpers_m32_targets): mpers_NAME = m32
-$(mpers_m32_targets): mpers_CC_FLAGS = @cc_flags_m32@
+$(mpers_m32_targets): mpers_CC_FLAGS = @CFLAGS_FOR_M32@ @cc_flags_m32@
+$(mpers_m32_targets): mpers_CPPFLAGS = @CPPFLAGS_FOR_M32@
+$(mpers_m32_targets): mpers_CC = @CC_FOR_M32@
 
 endif # HAVE_M32_MPERS
 
@@ -1134,7 +1194,9 @@ BUILT_SOURCES += $(mpers_mx32_targets)
 CLEANFILES    += $(mpers_mx32_targets)
 
 $(mpers_mx32_targets): mpers_NAME = mx32
-$(mpers_mx32_targets): mpers_CC_FLAGS = @cc_flags_mx32@
+$(mpers_mx32_targets): mpers_CC_FLAGS = @CFLAGS_FOR_MX32@ @cc_flags_mx32@
+$(mpers_mx32_targets): mpers_CPPFLAGS = @CPPFLAGS_FOR_MX32@
+$(mpers_mx32_targets): mpers_CC = @CC_FOR_MX32@
 
 endif # HAVE_MX32_MPERS
 

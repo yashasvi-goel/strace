@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001-2018 The strace developers.
+ * Copyright (c) 2001-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -9,6 +9,7 @@
 # define STRACE_MACROS_H
 
 # include <stdbool.h>
+# include <stddef.h>
 # include <sys/types.h>
 
 # include "gcc_compat.h"
@@ -36,17 +37,19 @@
 #  define ROUNDUP(val_, div_) (ROUNDUP_DIV((val_), (div_)) * (div_))
 # endif
 
+# define sizeof_field(type_, member_) (sizeof(((type_ *)0)->member_))
+
 # ifndef offsetofend
 #  define offsetofend(type_, member_)	\
-	(offsetof(type_, member_) + sizeof(((type_ *)0)->member_))
+	(offsetof(type_, member_) + sizeof_field(type_, member_))
 # endif
 
-#ifndef cast_ptr
-# define cast_ptr(type_, var_)	\
+# ifndef cast_ptr
+#  define cast_ptr(type_, var_)	\
 	((type_) (uintptr_t) (const volatile void *) (var_))
-#endif
+# endif
 
-#ifndef containerof
+# ifndef containerof
 /**
  * Return a pointer to a structure that contains the provided variable.
  *
@@ -55,10 +58,10 @@
  * @param member_ Name of the member field.
  * @return  Pointer to the container structure.
  */
-# define containerof(ptr_, struct_, member_)	\
+#  define containerof(ptr_, struct_, member_)	\
 	cast_ptr(struct_ *,			\
 		 (const volatile char *) (ptr_) - offsetof(struct_, member_))
-#endif
+# endif
 
 static inline bool
 is_filled(const char *ptr, char fill, size_t size)
@@ -72,5 +75,11 @@ is_filled(const char *ptr, char fill, size_t size)
 
 # define IS_ARRAY_ZERO(arr_)	\
 	is_filled((const char *) (arr_), 0, sizeof(arr_) + MUST_BE_ARRAY(arr_))
+
+# ifndef BIT
+#  define BIT(x_) (1U << (x_))
+# endif
+
+# define FLAG(name_) name_ = BIT(name_##_BIT)
 
 #endif /* !STRACE_MACROS_H */

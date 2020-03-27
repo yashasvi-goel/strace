@@ -1,6 +1,6 @@
 #!/bin/gawk -f
 #
-# Copyright (c) 2018 Dmitry V. Levin <ldv@altlinux.org>
+# Copyright (c) 2018-2019 Dmitry V. Levin <ldv@altlinux.org>
 # All rights reserved.
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
@@ -29,7 +29,7 @@
 }
 
 (in_struct == 1) {
-	if (match($0, /^[[:space:]]+[^;\[\]]+[[:space:]]+([^[:space:]\[\];]+)(\[[^;]*\])?;$/, a)) {
+	if (match($0, /^[[:space:]]+[^;:\[\]]+[[:space:]]+([^[:space:]\[\];:]+)(\[[^;:]*\])?;$/, a)) {
 		print "\t\t" prefix "." a[1] ","
 	}
 }
